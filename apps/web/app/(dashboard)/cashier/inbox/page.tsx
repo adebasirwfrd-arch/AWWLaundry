@@ -13,6 +13,57 @@ import { Inbox, MessageSquare, ArrowRight, Star, ClipboardCheck, AlertTriangle }
 
 const INBOX_ROLES = [Role.CASHIER, Role.MANAGER, Role.OWNER, Role.SUPER_ADMIN, Role.WORKER];
 
+const machineLogInclude = {
+  machine: {
+    select: {
+      id: true,
+      name: true,
+      type: true,
+      status: true,
+      branch: { select: { name: true, code: true } },
+    },
+  },
+  reportedBy: { select: { name: true } },
+  comments: {
+    orderBy: { createdAt: 'asc' as const },
+    include: { author: { select: { name: true } } },
+  },
+};
+
+function mapMachineTroubleRow(r: {
+  id: string;
+  note: string | null;
+  createdAt: Date;
+  machine: {
+    id: string;
+    name: string;
+    type: string;
+    status: string;
+    branch: { name: string; code: string };
+  };
+  reportedBy: { name: string } | null;
+  comments: Array<{
+    id: string;
+    body: string;
+    createdAt: Date;
+    author: { name: string };
+  }>;
+}) {
+  return {
+    id: r.id,
+    note: r.note,
+    createdAt: r.createdAt.toISOString(),
+    machine: r.machine,
+    reportedBy: r.reportedBy,
+    comments: r.comments.map((c) => ({
+      id: c.id,
+      body: c.body,
+      createdAt: c.createdAt.toISOString(),
+      author: c.author,
+    })),
+  };
+}
+
 export default async function CashierInboxPage() {
   const session = await requireAuth(INBOX_ROLES);
   const isWorker = session.user.role === Role.WORKER;
@@ -24,7 +75,7 @@ export default async function CashierInboxPage() {
   const canApproveOpname = session.user.role === Role.OWNER || session.user.role === Role.SUPER_ADMIN;
   const canSeeMachineTroubles = canApproveOpname;
 
-  const [pending, recentReviews, recentChats, pendingOpnames, draftOpnames, machineTroubles] =
+  const [pending, recentReviews, recentChats, pendingOpnames, draftOpnames, ownerMachineTroubles, workerMachineReports] =
     await Promise.all([
     isWorker
       ? Promise.resolve([])
@@ -78,18 +129,20 @@ export default async function CashierInboxPage() {
           },
           orderBy: { createdAt: 'desc' },
           take: 20,
-          include: {
-            machine: {
-              select: {
-                id: true,
-                name: true,
-                type: true,
-                status: true,
-                branch: { select: { name: true, code: true } },
-              },
-            },
-            reportedBy: { select: { name: true } },
+          include: machineLogInclude,
+        })
+      : Promise.resolve([]),
+    isWorker
+      ? prisma.machineLog.findMany({
+          where: {
+            eventType: 'TROUBLE_REPORTED',
+            reportedById: session.user.id,
+            resolvedAt: null,
+            machine: { branchId: session.user.branchId },
           },
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+          include: machineLogInclude,
         })
       : Promise.resolve([]),
   ]);
@@ -104,7 +157,7 @@ export default async function CashierInboxPage() {
           <h1 className="font-display text-3xl font-bold text-brand-navy">Kotak Masuk</h1>
           <p className="text-brand-navy/60">
             {isWorker
-              ? `Ulasan pelanggan · ${session.user.branchName}`
+              ? `Laporan mesin & balasan owner · Ulasan pelanggan · ${session.user.branchName}`
               : `Konfirmasi pesanan, ulasan & chat · ${session.user.branchName}`}
           </p>
         </div>
@@ -144,25 +197,38 @@ export default async function CashierInboxPage() {
         )}
 
         <div className={`space-y-6 ${isWorker ? 'max-w-2xl' : ''}`}>
+          {isWorker && (
+            <section id="laporan-mesin">
+              <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-bold text-brand-navy">
+                <AlertTriangle className="h-5 w-5 text-red-500" />
+                Laporan Mesin Saya
+                {workerMachineReports.length > 0 && (
+                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+                    {workerMachineReports.length}
+                  </span>
+                )}
+              </h2>
+              <InboxMachineTroubles
+                reports={workerMachineReports.map(mapMachineTroubleRow)}
+                emptyLabel="Belum ada laporan mesin. Laporkan dari Board Produksi jika ada kerusakan."
+              />
+            </section>
+          )}
+
           {canSeeMachineTroubles && (
             <section id="mesin">
               <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-bold text-brand-navy">
                 <AlertTriangle className="h-5 w-5 text-red-500" />
                 Gangguan Mesin
-                {machineTroubles.length > 0 && (
+                {ownerMachineTroubles.length > 0 && (
                   <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
-                    {machineTroubles.length}
+                    {ownerMachineTroubles.length}
                   </span>
                 )}
               </h2>
               <InboxMachineTroubles
-                reports={machineTroubles.map((r) => ({
-                  id: r.id,
-                  note: r.note,
-                  createdAt: r.createdAt.toISOString(),
-                  machine: r.machine,
-                  reportedBy: r.reportedBy,
-                }))}
+                reports={ownerMachineTroubles.map(mapMachineTroubleRow)}
+                canReply
               />
             </section>
           )}

@@ -28,6 +28,7 @@ function linkFor(type: string, data: string): string {
     /* ignore */
   }
   if (type === 'MACHINE_TROUBLE') return '/cashier/inbox#mesin';
+  if (type === 'MACHINE_TROUBLE_REPLY') return '/cashier/inbox#laporan-mesin';
   if (type === 'ORDER_REVIEW') return '/cashier/inbox#ulasan';
   if (type === 'ORDER_CONFIRMATION') return '/cashier/inbox';
   if (type === 'STOCK_OPNAME_DRAFT') return '/cashier/inbox#opname-draft';

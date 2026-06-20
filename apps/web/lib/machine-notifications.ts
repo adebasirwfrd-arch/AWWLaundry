@@ -19,6 +19,7 @@ async function getBranchOwners(branchId: string) {
 }
 
 export async function notifyMachineTroubleReported(params: {
+  machineLogId: string;
   machineId: string;
   machineName: string;
   machineType: string;
@@ -38,6 +39,7 @@ export async function notifyMachineTroubleReported(params: {
     title: `Gangguan mesin: ${params.machineName}`,
     body: `${params.reportedByName} melaporkan masalah — ${params.note}`,
     data: {
+      machineLogId: params.machineLogId,
       machineId: params.machineId,
       branchId: params.branchId,
       machineName: params.machineName,

@@ -253,6 +253,7 @@ model User {
   statusChanges    OrderStatusLog[]
   paymentsReceived Payment[]        @relation("PaymentReceivedBy")
   machineReports   MachineLog[]
+  machineTroubleComments MachineTroubleComment[]
   expenses         Expense[]
   auditLogs        AuditLog[]
   aiConversations  AIConversation[]
@@ -488,6 +489,20 @@ model MachineLog {
 
   machine    Machine @relation(fields: [machineId], references: [id])
   reportedBy User?   @relation(fields: [reportedById], references: [id])
+  comments   MachineTroubleComment[]
+}
+
+model MachineTroubleComment {
+  id           String   @id @default(cuid())
+  machineLogId String
+  authorId     String
+  body         String
+  createdAt    DateTime @default(now())
+
+  machineLog MachineLog @relation(fields: [machineLogId], references: [id], onDelete: Cascade)
+  author     User       @relation(fields: [authorId], references: [id])
+
+  @@index([machineLogId, createdAt])
 }
 
 model InventoryItem {

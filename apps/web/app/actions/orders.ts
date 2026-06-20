@@ -303,7 +303,7 @@ export async function reportMachineTrouble(machineId: string, note: string) {
     data: { status: 'TROUBLE' },
   });
 
-  await prisma.machineLog.create({
+  const log = await prisma.machineLog.create({
     data: {
       machineId,
       eventType: 'TROUBLE_REPORTED',
@@ -318,10 +318,11 @@ export async function reportMachineTrouble(machineId: string, note: string) {
     'Machine',
     machineId,
     null,
-    { note: trimmed, machineName: machine.name }
+    { note: trimmed, machineName: machine.name, machineLogId: log.id }
   );
 
   void notifyMachineTroubleReported({
+    machineLogId: log.id,
     machineId,
     machineName: machine.name,
     machineType: machine.type,
@@ -337,5 +338,5 @@ export async function reportMachineTrouble(machineId: string, note: string) {
   revalidatePath('/cashier/inbox');
   revalidatePath('/owner/audit-trail');
 
-  return { ok: true };
+  return { ok: true, logId: log.id };
 }
