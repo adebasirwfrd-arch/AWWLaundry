@@ -64,6 +64,8 @@ export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   DANA: 'DANA',
 };
 
+export * from './roles';
+
 export const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: 'Super Admin',
   OWNER: 'Owner',

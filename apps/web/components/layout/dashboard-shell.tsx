@@ -23,8 +23,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Role } from '@aww/database';
-import { ROLE_LABELS } from '@aww/shared';
+import { Role, ROLE_LABELS } from '@aww/shared';
 import { RainbowBubbleField } from '@/components/animations/rainbow-bubble-field';
 import { PageTransition } from '@/components/animations/page-transition';
 import { NotificationBell } from '@/components/layout/notification-bell';
