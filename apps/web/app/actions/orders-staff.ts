@@ -5,6 +5,7 @@ import { prisma, Role } from '@aww/database';
 import { formatCurrency } from '@aww/shared';
 import { requireAuth } from '@/lib/session';
 import { createNotification, notifyBranchRoles } from '@/lib/notify';
+import { createAuditLog } from '@/lib/audit';
 import { notifyCustomerOrderCreated, notifyCustomerOrderStatus } from '@/lib/order-notifications';
 import { awardLoyaltyPointsForOrder, awardAppOrderBonus, refundRedeemedPoints } from '@/lib/loyalty';
 
@@ -151,11 +152,34 @@ export async function confirmOrderWithPayment(input: {
     }).catch(() => {});
   }
 
+  const auditCtx = {
+    organizationId: session.user.organizationId,
+    branchId: order.branchId,
+    userId: session.user.id,
+  };
+  await createAuditLog(
+    auditCtx,
+    'ORDER_STATUS_CHANGED',
+    'Order',
+    order.id,
+    { status: 'ON_HOLD' },
+    { status: 'RECEIVED', orderNumber: order.orderNumber, paymentMethod: input.paymentMethod, weightKg, total: finalTotal }
+  );
+  await createAuditLog(
+    auditCtx,
+    'PAYMENT_RECEIVED',
+    'Payment',
+    order.id,
+    null,
+    { amount: finalTotal, method: input.paymentMethod, orderNumber: order.orderNumber }
+  );
+
   revalidatePath('/cashier/inbox');
   revalidatePath('/cashier');
   revalidatePath('/worker');
   revalidatePath('/owner');
   revalidatePath('/owner/orders');
+  revalidatePath('/owner/audit-trail');
   revalidatePath(`/orders/${order.id}`);
   revalidatePath('/customer/history');
   revalidatePath('/customer');
@@ -204,8 +228,22 @@ export async function rejectOrder(orderId: string, reason?: string) {
     }).catch(() => {});
   }
 
+  await createAuditLog(
+    {
+      organizationId: session.user.organizationId,
+      branchId: order.branchId,
+      userId: session.user.id,
+    },
+    'ORDER_CANCELLED',
+    'Order',
+    order.id,
+    { status: 'ON_HOLD' },
+    { status: 'CANCELLED', orderNumber: order.orderNumber, reason: reason || 'Ditolak kasir' }
+  );
+
   revalidatePath('/cashier/inbox');
   revalidatePath('/customer');
   revalidatePath('/customer/profile');
+  revalidatePath('/owner/audit-trail');
   return { ok: true };
 }

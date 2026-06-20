@@ -122,11 +122,12 @@ export async function createExpense(input: {
     'Expense',
     expense.id,
     null,
-    { type: input.type, category, netAmount }
+    { type: input.type, category, title, amount: input.amount, netAmount }
   );
 
   revalidatePath('/owner/cashflow');
   revalidatePath('/cashier/cashflow');
+  revalidatePath('/owner/audit-trail');
 
   const creator = await prisma.user.findUnique({
     where: { id: c.userId },
@@ -222,5 +223,6 @@ export async function deleteExpense(expenseId: string) {
 
   revalidatePath('/owner/cashflow');
   revalidatePath('/cashier/cashflow');
+  revalidatePath('/owner/audit-trail');
   return { ok: true };
 }

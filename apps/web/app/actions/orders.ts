@@ -155,6 +155,7 @@ export async function createOrder(data: {
   revalidatePath(`/orders/${order.id}`);
   revalidatePath('/owner');
   revalidatePath('/worker');
+  revalidatePath('/owner/audit-trail');
 
   return order;
 }
@@ -225,6 +226,7 @@ export async function updateOrderStatus(orderId: string, newStatus: string, note
   revalidatePath('/worker');
   revalidatePath('/owner');
   revalidatePath('/cashier');
+  revalidatePath('/owner/audit-trail');
 
   return updated;
 }
@@ -312,4 +314,5 @@ export async function reportMachineTrouble(machineId: string, note: string) {
 
   revalidatePath('/worker');
   revalidatePath('/owner');
+  revalidatePath('/owner/audit-trail');
 }

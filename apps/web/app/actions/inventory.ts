@@ -269,12 +269,13 @@ export async function createStockOpname(branchId?: string) {
     'StockOpname',
     opname.id,
     null,
-    { lineCount: uniqueItems.length }
+    { status: 'DRAFT', lineCount: uniqueItems.length }
   );
 
   revalidatePath('/owner/inventory');
   revalidatePath('/cashier/inventory');
   revalidatePath('/cashier/inbox');
+  revalidatePath('/owner/audit-trail');
 
   const branch = await prisma.branch.findUnique({ where: { id: bid }, select: { name: true } });
   void notifyOpnameDraftCreated({
