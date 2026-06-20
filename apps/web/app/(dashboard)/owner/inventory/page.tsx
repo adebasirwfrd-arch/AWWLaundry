@@ -14,7 +14,7 @@ import { listOrgBranches } from '@/app/actions/branch-admin';
 export default async function InventoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ branch?: string }>;
+  searchParams: Promise<{ branch?: string; tab?: string; step?: string }>;
 }) {
   const session = await requireAuth([Role.OWNER, Role.MANAGER]);
   const params = await searchParams;
@@ -47,6 +47,7 @@ export default async function InventoryPage({
           opnames={opnames}
           summary={summary}
           userRole={session.user.role}
+          defaultTab={params.tab as 'items' | 'movements' | 'opname' | 'history' | undefined}
         />
       </Suspense>
     </DashboardShell>

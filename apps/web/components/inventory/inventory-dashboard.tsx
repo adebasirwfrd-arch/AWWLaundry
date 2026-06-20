@@ -19,6 +19,7 @@ import { formatCurrency } from '@aww/shared';
 import {
   approveStockOpname,
   cancelStockOpname,
+  completeOpnameCountStep,
   createStockOpname,
   getStockOpnameDetail,
   recordStockMovement,
@@ -29,6 +30,7 @@ import {
   getExpectedBranchCash,
 } from '@/app/actions/inventory';
 import { OpnameDetailModal, type OpnameDetailData } from '@/components/inventory/opname-detail-modal';
+import { inferOpnameResumeStep } from '@/lib/opname-utils';
 import { toast } from '@/lib/toast';
 
 type InventoryItem = {
@@ -109,9 +111,7 @@ function parseQty(val: string): number {
 function inferOpnameStep(activeOpname: StockOpname | null, urlStep: string | null): OpnameStep {
   if (urlStep === 'count' || urlStep === 'cash' || urlStep === 'review') return urlStep;
   if (!activeOpname) return 'count';
-  if (activeOpname.status === 'PENDING_APPROVAL') return 'review';
-  if (activeOpname.cashExpected != null && activeOpname.cashActual != null) return 'review';
-  return 'count';
+  return inferOpnameResumeStep(activeOpname);
 }
 
 function buildInventoryUrl(basePath: string, branchId: string, tab?: Tab, step?: OpnameStep, lockBranch?: boolean) {
@@ -150,6 +150,7 @@ export function InventoryDashboard({
   const [opnames] = useState(initialOpnames);
   const [summary] = useState(initialSummary);
   const [pending, startTransition] = useTransition();
+  const [cashLoading, setCashLoading] = useState(false);
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
@@ -186,6 +187,17 @@ export function InventoryDashboard({
   const [detailLoading, setDetailLoading] = useState(false);
 
   const lowItems = useMemo(() => items.filter((i) => i.currentStock <= i.minStock), [items]);
+
+  const cashExpectedAmount = parseQty(cashForm.expected);
+  const cashActualAmount = parseQty(cashForm.actual);
+  const cashVariancePreview = cashForm.actual.trim() ? cashActualAmount - cashExpectedAmount : null;
+  const hasStockVariance = activeOpname?.lines.some((line) => line.variance !== 0) ?? false;
+  const needsVarianceNote =
+    (cashVariancePreview != null && cashVariancePreview !== 0) || hasStockVariance;
+  const canProceedCash =
+    cashForm.actual.trim() !== '' &&
+    cashForm.expected.trim() !== '' &&
+    (!needsVarianceNote || cashForm.notes.trim() !== '');
 
   const fillExpectedCash = useCallback(async () => {
     if (activeOpname?.cashExpected != null) return;
@@ -276,6 +288,7 @@ export function InventoryDashboard({
     startTransition(async () => {
       try {
         const created = await createStockOpname(branchId);
+        const resumeStep = inferOpnameResumeStep(created);
         setActiveOpname({
           id: created.id,
           status: created.status,
@@ -295,9 +308,11 @@ export function InventoryDashboard({
           })),
         });
         setTab('opname');
-        setOpnameStep('count');
-        syncUrl('opname', 'count');
-        toast.success('Sesi opname dimulai');
+        setOpnameStep(resumeStep);
+        syncUrl('opname', resumeStep);
+        toast.success(
+          resumeStep === 'count' ? 'Sesi opname dimulai' : 'Melanjutkan opname yang belum selesai'
+        );
         router.refresh();
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Gagal memulai opname');
@@ -326,17 +341,21 @@ export function InventoryDashboard({
           });
         }
         setActiveOpname({ ...activeOpname, lines: updatedLines });
+        await completeOpnameCountStep(activeOpname.id, branchId);
+        setActiveOpname({ ...activeOpname, lines: updatedLines, status: 'COUNTING' });
         setOpnameStep('cash');
         syncUrl('opname', 'cash');
-        try {
-          const expected = await getExpectedBranchCash(branchId);
-          setCashForm((prev) => ({ ...prev, expected: String(expected) }));
-        } catch {
-          setCashForm((prev) =>
-            prev.expected ? prev : { ...prev, expected: String(initialSummary.expectedCash) }
-          );
-        }
         toast.success('Hitungan fisik disimpan');
+        void (async () => {
+          try {
+            const expected = await getExpectedBranchCash(branchId);
+            setCashForm((prev) => ({ ...prev, expected: String(expected) }));
+          } catch {
+            setCashForm((prev) =>
+              prev.expected ? prev : { ...prev, expected: String(initialSummary.expectedCash) }
+            );
+          }
+        })();
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Gagal menyimpan');
       }
@@ -345,6 +364,15 @@ export function InventoryDashboard({
 
   function saveCash() {
     if (!activeOpname) return;
+    if (!cashForm.actual.trim()) {
+      toast.error('Isi kas aktual hasil hitungan fisik di laci kasir');
+      return;
+    }
+    if (needsVarianceNote && !cashForm.notes.trim()) {
+      toast.error('Ada selisih stok atau kas — wajib isi catatan penjelasan');
+      return;
+    }
+    setCashLoading(true);
     startTransition(async () => {
       try {
         const cashExpected = parseQty(cashForm.expected);
@@ -368,6 +396,8 @@ export function InventoryDashboard({
         toast.success('Rekonsiliasi kas disimpan');
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Gagal');
+      } finally {
+        setCashLoading(false);
       }
     });
   }
@@ -404,6 +434,7 @@ export function InventoryDashboard({
 
   function cancelOpname() {
     if (!activeOpname) return;
+    if (!confirm('Batalkan stock opname ini? Sesi akan dihapus dan Anda bisa memulai baru.')) return;
     startTransition(async () => {
       try {
         await cancelStockOpname(activeOpname.id, branchId);
@@ -590,15 +621,22 @@ export function InventoryDashboard({
                 <ClipboardCheck className="mx-auto h-12 w-12 text-brand-orange" />
                 <h3 className="mt-3 font-display text-lg font-bold">Mulai Stock Opname</h3>
                 <p className="mt-1 text-sm text-brand-navy/60">
-                  Snapshot stok sistem → hitung fisik → rekonsiliasi kas → ajukan persetujuan owner
+                  Snapshot stok sistem → hitung fisik → rekonsiliasi kas → ajukan persetujuan owner.
+                  Sesi yang belum selesai bisa dilanjutkan dari <strong>Kotak Masuk</strong>.
                 </p>
                 <Button className="mt-4" onClick={startOpname} disabled={pending || items.length === 0}>
-                  {pending ? 'Membuat sesi...' : 'Buat Sesi Opname Baru'}
+                  {pending ? 'Memuat...' : 'Buat Sesi Opname Baru'}
                 </Button>
               </CardContent>
             </Card>
           ) : (
             <>
+              {['DRAFT', 'COUNTING'].includes(activeOpname.status) && (
+                <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+                  Sesi opname <strong>belum selesai</strong> — Anda bisa pindah menu lain tanpa kehilangan sesi.
+                  Lanjutkan kapan saja dari sini atau <strong>Kotak Masuk</strong>.
+                </div>
+              )}
               {activeOpname.status === 'PENDING_APPROVAL' && (
                 <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                   Sesi opname ini <strong>menunggu persetujuan owner</strong>.
@@ -660,9 +698,33 @@ export function InventoryDashboard({
                       </p>
                     </div>
                     <Input label="Kas Aktual (Rp)" type="number" value={cashForm.actual} onChange={(e) => setCashForm({ ...cashForm, actual: e.target.value })} />
-                    <Input label="Catatan" className="sm:col-span-2" value={cashForm.notes} onChange={(e) => setCashForm({ ...cashForm, notes: e.target.value })} />
+                    <Input
+                      label={needsVarianceNote ? 'Catatan (wajib jika ada selisih)' : 'Catatan'}
+                      className="sm:col-span-2"
+                      value={cashForm.notes}
+                      onChange={(e) => setCashForm({ ...cashForm, notes: e.target.value })}
+                      error={needsVarianceNote && !cashForm.notes.trim() ? 'Jelaskan penyebab selisih stok atau kas' : undefined}
+                    />
+                    {cashVariancePreview != null && (
+                      <div
+                        className={`sm:col-span-2 rounded-xl px-4 py-3 text-sm ${
+                          cashVariancePreview === 0
+                            ? 'bg-green-50 text-green-800'
+                            : 'bg-amber-50 text-amber-800'
+                        }`}
+                      >
+                        <p>
+                          Selisih kas: <strong>{formatCurrency(cashVariancePreview)}</strong>
+                          {cashVariancePreview === 0
+                            ? ' — kas fisik sesuai sistem.'
+                            : ' — isi catatan sebelum lanjut ke review.'}
+                        </p>
+                      </div>
+                    )}
                     <div className="flex gap-2">
-                      <Button onClick={saveCash} disabled={pending}>Lanjut Review</Button>
+                      <Button onClick={saveCash} disabled={cashLoading || !canProceedCash}>
+                        {cashLoading ? 'Menyimpan...' : 'Lanjut Review'}
+                      </Button>
                       <Button variant="outline" onClick={() => {
                         setOpnameStep('count');
                         syncUrl('opname', 'count');

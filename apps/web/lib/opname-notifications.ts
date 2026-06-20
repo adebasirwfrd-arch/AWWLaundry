@@ -3,6 +3,54 @@ import { formatCurrency } from '@aww/shared';
 import { getAppUrl, getOwnerNotificationEmail } from '@/lib/env';
 import { sendStockOpnamePendingEmail } from '@/lib/brevo';
 import { createNotification, notifyBranchRoles } from '@/lib/notify';
+import type { OpnameResumeStep } from '@/lib/opname-utils';
+import { buildOpnameResumeUrl } from '@/lib/opname-utils';
+
+const OPNAME_NOTIFICATION_TYPES = [
+  'STOCK_OPNAME_DRAFT',
+  'STOCK_OPNAME_PENDING',
+  'STOCK_OPNAME_REVISION',
+] as const;
+
+export async function dismissOpnameNotifications(opnameId: string) {
+  const rows = await prisma.notification.findMany({
+    where: { type: { in: [...OPNAME_NOTIFICATION_TYPES] } },
+    select: { id: true, data: true },
+  });
+
+  const toDelete = rows.filter((row) => {
+    try {
+      const parsed = JSON.parse(row.data) as { opnameId?: string };
+      return parsed.opnameId === opnameId;
+    } catch {
+      return row.data.includes(opnameId);
+    }
+  });
+
+  if (toDelete.length > 0) {
+    await prisma.notification.deleteMany({
+      where: { id: { in: toDelete.map((r) => r.id) } },
+    });
+  }
+}
+
+export async function notifyOpnameDraftCreated(params: {
+  userId: string;
+  opnameId: string;
+  branchId: string;
+  branchName: string;
+  step: OpnameResumeStep;
+  userRole?: string;
+}) {
+  const resumeUrl = buildOpnameResumeUrl(params.userRole ?? 'CASHIER', params.branchId, params.step);
+  await createNotification({
+    userId: params.userId,
+    type: 'STOCK_OPNAME_DRAFT',
+    title: 'Stock opname belum selesai',
+    body: `Lanjutkan opname ${params.branchName} yang Anda mulai.`,
+    data: { opnameId: params.opnameId, branchId: params.branchId, step: params.step, resumeUrl },
+  });
+}
 
 async function getBranchOwners(branchId: string) {
   const rows = await prisma.userBranchRole.findMany({

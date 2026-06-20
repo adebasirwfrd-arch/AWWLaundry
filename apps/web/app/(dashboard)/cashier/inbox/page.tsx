@@ -6,7 +6,8 @@ import { DashboardShell } from '@/components/layout/dashboard-shell';
 import { PendingOrders } from '@/components/pos/pending-orders';
 import { InboxReviews } from '@/components/inbox/inbox-reviews';
 import { InboxOpnameApprovals } from '@/components/inbox/inbox-opname-approvals';
-import { listPendingOpnameApprovals } from '@/app/actions/inventory';
+import { InboxOpnameDrafts } from '@/components/inbox/inbox-opname-drafts';
+import { listPendingOpnameApprovals, listUnfinishedOpnamesForInbox } from '@/app/actions/inventory';
 import { Inbox, MessageSquare, ArrowRight, Star, ClipboardCheck } from 'lucide-react';
 
 const INBOX_ROLES = [Role.CASHIER, Role.MANAGER, Role.OWNER, Role.SUPER_ADMIN, Role.WORKER];
@@ -16,7 +17,7 @@ export default async function CashierInboxPage() {
   const isWorker = session.user.role === Role.WORKER;
   const canApproveOpname = session.user.role === Role.OWNER || session.user.role === Role.SUPER_ADMIN;
 
-  const [pending, recentReviews, recentChats, pendingOpnames] = await Promise.all([
+  const [pending, recentReviews, recentChats, pendingOpnames, draftOpnames] = await Promise.all([
     isWorker
       ? Promise.resolve([])
       : prisma.order.findMany({
@@ -56,6 +57,7 @@ export default async function CashierInboxPage() {
     listPendingOpnameApprovals(
       canApproveOpname ? undefined : session.user.branchId
     ),
+    listUnfinishedOpnamesForInbox(),
   ]);
 
   return (
@@ -108,6 +110,33 @@ export default async function CashierInboxPage() {
         )}
 
         <div className={`space-y-6 ${isWorker ? 'max-w-2xl' : ''}`}>
+          <section id="opname-draft">
+            <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-bold text-brand-navy">
+              <ClipboardCheck className="h-5 w-5 text-sky-500" />
+              Stock Opname Belum Selesai
+              {draftOpnames.length > 0 && (
+                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-700">
+                  {draftOpnames.length}
+                </span>
+              )}
+            </h2>
+            <InboxOpnameDrafts
+              userRole={session.user.role}
+              opnames={draftOpnames.map((o) => ({
+                id: o.id,
+                status: o.status,
+                period: o.period.toISOString(),
+                createdAt: o.createdAt.toISOString(),
+                branchId: o.branchId,
+                branchName: o.branchName,
+                branchCode: o.branchCode,
+                lineCount: o.lineCount,
+                resumeStep: o.resumeStep,
+                totalVariance: o.totalVariance,
+              }))}
+            />
+          </section>
+
           <section id="opname">
             <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-bold text-brand-navy">
               <ClipboardCheck className="h-5 w-5 text-brand-orange" />
