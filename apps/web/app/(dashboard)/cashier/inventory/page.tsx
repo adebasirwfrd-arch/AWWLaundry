@@ -6,6 +6,7 @@ import { InventoryDashboard } from '@/components/inventory/inventory-dashboard';
 import {
   getInventorySummary,
   listInventoryItems,
+  listStockMovements,
   listStockOpnames,
 } from '@/app/actions/inventory';
 
@@ -20,7 +21,7 @@ export default async function CashierInventoryPage({
 
   const [items, movements, opnames, summary] = await Promise.all([
     listInventoryItems(branchId),
-    Promise.resolve([]),
+    listStockMovements(branchId),
     listStockOpnames(branchId),
     getInventorySummary(branchId),
   ]);
@@ -38,7 +39,7 @@ export default async function CashierInventoryPage({
 
       <Suspense fallback={<p className="text-brand-navy/60">Memuat inventori...</p>}>
         <InventoryDashboard
-          key={`${branchId}-${summary.unfinishedOpname?.id ?? 'none'}-${summary.unfinishedOpname?.status ?? ''}`}
+          key={branchId}
           branches={[]}
           initialBranchId={branchId}
           branchLabel={branchLabel}
@@ -48,7 +49,7 @@ export default async function CashierInventoryPage({
           opnames={opnames}
           summary={summary}
           userRole={session.user.role}
-          defaultTab={(params.tab as 'opname' | 'history' | undefined) ?? 'opname'}
+          defaultTab={params.tab as 'items' | 'movements' | 'opname' | 'history' | undefined}
           basePath="/cashier/inventory"
         />
       </Suspense>

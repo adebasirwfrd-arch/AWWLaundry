@@ -85,6 +85,22 @@ export function formatCurrency(amount: number | string): string {
   }).format(num);
 }
 
+const WIB = 'Asia/Jakarta';
+
+/** Format tanggal konsisten server/client (timezone WIB) — hindari hydration mismatch. */
+export function formatDateId(
+  value: Date | string | number | null | undefined,
+  opts?: { withTime?: boolean }
+): string {
+  if (value == null) return '';
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  if (opts?.withTime) {
+    return d.toLocaleString('id-ID', { timeZone: WIB, dateStyle: 'short', timeStyle: 'short' });
+  }
+  return d.toLocaleDateString('id-ID', { timeZone: WIB });
+}
+
 export function formatWeight(kg: number | string): string {
   const num = typeof kg === 'string' ? parseFloat(kg) : kg;
   return `${num.toFixed(2)} kg`;

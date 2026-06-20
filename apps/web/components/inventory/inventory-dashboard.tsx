@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { formatCurrency } from '@aww/shared';
+import { formatCurrency, formatDateId } from '@aww/shared';
 import {
   approveStockOpname,
   cancelStockOpname,
@@ -105,6 +105,15 @@ interface InventoryDashboardProps {
 
 type Tab = 'items' | 'movements' | 'opname' | 'history';
 
+const INVENTORY_TABS: { id: Tab; label: string; icon: typeof Package }[] = [
+  { id: 'items', label: 'Master Stok', icon: Package },
+  { id: 'movements', label: 'Masuk/Keluar', icon: History },
+  { id: 'opname', label: 'Stock Opname', icon: ClipboardCheck },
+  { id: 'history', label: 'Riwayat Opname', icon: Wallet },
+];
+
+const TAB_IDS: Tab[] = ['items', 'movements', 'opname', 'history'];
+
 const CATEGORIES = ['Supplies', 'Chemical', 'Packaging', 'Equipment', 'Lainnya'];
 
 type OpnameStep = 'count' | 'cash' | 'review';
@@ -166,22 +175,10 @@ export function InventoryDashboard({
   const urlTab = (searchParams.get('tab') as Tab | null) ?? defaultTab;
   const urlStep = searchParams.get('step');
 
-  const cashierMode = userRole === 'CASHIER';
-  const allTabs: { id: Tab; label: string; icon: typeof Package }[] = [
-    { id: 'items', label: 'Master Stok', icon: Package },
-    { id: 'movements', label: 'Masuk/Keluar', icon: History },
-    { id: 'opname', label: 'Stock Opname', icon: ClipboardCheck },
-    { id: 'history', label: 'Riwayat Opname', icon: Wallet },
-  ];
-  const tabs = cashierMode
-    ? allTabs.filter((t) => t.id === 'opname' || t.id === 'history')
-    : allTabs;
-  const allowedTabs = tabs.map((t) => t.id);
-
   const [tab, setTab] = useState<Tab>(() => {
-    if (urlTab && allowedTabs.includes(urlTab)) return urlTab;
-    if (defaultTab && allowedTabs.includes(defaultTab)) return defaultTab;
-    return cashierMode ? 'opname' : 'items';
+    if (urlTab && TAB_IDS.includes(urlTab)) return urlTab;
+    if (defaultTab && TAB_IDS.includes(defaultTab)) return defaultTab;
+    return 'items';
   });
   const [branchId, setBranchId] = useState(initialBranchId);
   const [items, setItems] = useState(initialItems);
@@ -189,6 +186,7 @@ export function InventoryDashboard({
   const [opnames, setOpnames] = useState(initialOpnames);
   const [summary, setSummary] = useState(initialSummary);
   const [pending, startTransition] = useTransition();
+  const [startingOpname, setStartingOpname] = useState(false);
   const [cashLoading, setCashLoading] = useState(false);
 
   const [showForm, setShowForm] = useState(false);
@@ -278,9 +276,8 @@ export function InventoryDashboard({
     });
     setLineEdits({});
     setTab((current) => {
-      if (urlTab && allowedTabs.includes(urlTab)) return urlTab;
-      if (defaultTab && allowedTabs.includes(defaultTab)) return defaultTab;
-      if (!allowedTabs.includes(current)) return cashierMode ? 'opname' : 'items';
+      if (urlTab && TAB_IDS.includes(urlTab)) return urlTab;
+      if (defaultTab && TAB_IDS.includes(defaultTab)) return defaultTab;
       return current;
     });
   }, [
@@ -292,8 +289,6 @@ export function InventoryDashboard({
     urlStep,
     urlTab,
     defaultTab,
-    allowedTabs,
-    cashierMode,
   ]);
 
   const syncUrl = useCallback(
@@ -365,40 +360,42 @@ export function InventoryDashboard({
     });
   }
 
-  function startOpname() {
-    startTransition(async () => {
-      try {
-        const created = await createStockOpname(branchId);
-        const resumeStep = inferOpnameResumeStep(created);
-        setActiveOpname({
-          id: created.id,
-          status: created.status,
-          period: created.period,
-          cashExpected: created.cashExpected,
-          cashActual: created.cashActual,
-          cashVariance: created.cashVariance,
-          notes: created.notes,
-          createdAt: created.createdAt,
-          lines: created.lines.map((l) => ({
-            id: l.id,
-            systemQty: l.systemQty,
-            physicalQty: l.physicalQty,
-            variance: l.variance,
-            varianceCost: l.varianceCost,
-            item: { name: l.item.name, unit: l.item.unit, sku: l.item.sku ?? null },
-          })),
-        });
-        setTab('opname');
-        setOpnameStep(resumeStep);
-        syncUrl('opname', resumeStep);
-        toast.success(
-          resumeStep === 'count' ? 'Sesi opname dimulai' : 'Melanjutkan opname yang belum selesai'
-        );
-        router.refresh();
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : 'Gagal memulai opname');
-      }
-    });
+  async function startOpname() {
+    if (startingOpname) return;
+    setStartingOpname(true);
+    try {
+      const created = await createStockOpname(branchId);
+      const resumeStep = inferOpnameResumeStep(created);
+      setActiveOpname({
+        id: created.id,
+        status: created.status,
+        period: created.period,
+        cashExpected: created.cashExpected,
+        cashActual: created.cashActual,
+        cashVariance: created.cashVariance,
+        notes: created.notes,
+        createdAt: created.createdAt,
+        lines: created.lines.map((l) => ({
+          id: l.id,
+          systemQty: l.systemQty,
+          physicalQty: l.physicalQty,
+          variance: l.variance,
+          varianceCost: l.varianceCost,
+          item: { name: l.item.name, unit: l.item.unit, sku: l.item.sku ?? null },
+        })),
+      });
+      setTab('opname');
+      setOpnameStep(resumeStep);
+      syncUrl('opname', resumeStep);
+      toast.success(
+        resumeStep === 'count' ? 'Sesi opname dimulai' : 'Melanjutkan opname yang belum selesai'
+      );
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Gagal memulai opname');
+    } finally {
+      setStartingOpname(false);
+    }
   }
 
   function saveLineCounts() {
@@ -592,7 +589,7 @@ export function InventoryDashboard({
             summary.pendingApprovalCount > 0
               ? `${summary.pendingApprovalCount} menunggu persetujuan`
               : summary.lastOpnameApprovedAt
-                ? `Terakhir: ${new Date(summary.lastOpnameApprovedAt).toLocaleDateString('id-ID')}`
+                ? `Terakhir: ${formatDateId(summary.lastOpnameApprovedAt)}`
                 : undefined
           }
           icon={ClipboardCheck}
@@ -652,7 +649,7 @@ export function InventoryDashboard({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {tabs.map((t) => (
+        {INVENTORY_TABS.map((t) => (
           <Button
             key={t.id}
             variant={tab === t.id ? 'primary' : 'outline'}
@@ -757,7 +754,7 @@ export function InventoryDashboard({
                     {' '}{m.qty} {m.item.unit} — {m.item.name}
                     {m.reference && <span className="text-brand-navy/40"> ({m.reference})</span>}
                   </span>
-                  <span className="text-brand-navy/40">{new Date(m.createdAt).toLocaleString('id-ID')}</span>
+                  <span className="text-brand-navy/40">{formatDateId(m.createdAt, { withTime: true })}</span>
                 </div>
               ))}
             </div>
@@ -776,8 +773,8 @@ export function InventoryDashboard({
                   Snapshot stok sistem → hitung fisik → rekonsiliasi kas → ajukan persetujuan owner.
                   Sesi yang belum selesai bisa dilanjutkan dari <strong>Kotak Masuk</strong>.
                 </p>
-                <Button className="mt-4" onClick={startOpname} disabled={pending || items.length === 0}>
-                  {pending ? 'Memuat...' : 'Buat Sesi Opname Baru'}
+                <Button className="mt-4" onClick={startOpname} disabled={startingOpname || items.length === 0}>
+                  {startingOpname ? 'Memuat...' : 'Buat Sesi Opname Baru'}
                 </Button>
               </CardContent>
             </Card>
@@ -969,7 +966,7 @@ export function InventoryDashboard({
               >
                 <CardContent className="flex justify-between p-4">
                   <div>
-                    <p className="font-semibold">{new Date(o.period).toLocaleDateString('id-ID')}</p>
+                    <p className="font-semibold">{formatDateId(o.period)}</p>
                     <p className="text-sm text-brand-navy/60">{o.lines.length} item · Selisih nilai {formatCurrency(totalVariance)}</p>
                     {o.cashVariance != null && (
                       <p className="text-sm text-brand-navy/60">Selisih kas: {formatCurrency(o.cashVariance)}</p>
