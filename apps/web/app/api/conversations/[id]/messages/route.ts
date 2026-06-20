@@ -18,6 +18,7 @@ export async function GET(
       id: session.user.id,
       role: session.user.role as string,
       organizationId: session.user.organizationId,
+      branchId: session.user.branchId,
     },
     id
   );

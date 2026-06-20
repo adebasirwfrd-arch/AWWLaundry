@@ -165,15 +165,19 @@ model Conversation {
   organizationId String
   type           ConversationType
   customerId     String?
+  branchId       String?
+  audienceScope  String           @default("ALL")
   title          String?
   lastMessageAt  DateTime         @default(now())
   createdAt      DateTime         @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id])
   customer     Customer?    @relation(fields: [customerId], references: [id])
+  branch       Branch?      @relation("BranchStaffDiscussions", fields: [branchId], references: [id])
   messages     Message[]
 
   @@index([organizationId, type, lastMessageAt])
+  @@index([organizationId, type, branchId, audienceScope])
 }
 
 model Message {
@@ -217,6 +221,7 @@ model Branch {
   dailySummaries  DailyBranchSummary[]
   auditLogs       AuditLog[]
   branchPricing   BranchPricing[]
+  staffDiscussions Conversation[] @relation("BranchStaffDiscussions")
 
   @@index([organizationId])
 }

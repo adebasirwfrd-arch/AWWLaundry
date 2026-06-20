@@ -5,6 +5,12 @@ import { prisma, Role } from '@aww/database';
 import { requireAuth } from '@/lib/session';
 import { getAccessibleConversation } from '@/lib/chat';
 import { storeUploadedFile } from '@/lib/object-storage';
+import {
+  type DiscussionAudienceScope,
+  discussionTitle,
+  isRoleInDiscussionScope,
+  rolesForDiscussionScope,
+} from '@/lib/discussion';
 
 export async function uploadAttachment(formData: FormData) {
   await requireAuth();
@@ -49,22 +55,59 @@ export async function getOrCreateCustomerConversation() {
   return convo.id;
 }
 
-/** Staff: get (or create) the shared staff discussion for the organization. */
-export async function getOrCreateStaffDiscussion() {
+/** Staff: get (or create) branch-scoped discussion for a target audience. */
+export async function getOrCreateStaffDiscussion(input?: {
+  branchId?: string;
+  audienceScope?: DiscussionAudienceScope;
+}) {
   const session = await requireAuth([Role.OWNER, Role.SUPER_ADMIN, Role.MANAGER, Role.CASHIER, Role.WORKER]);
+  const orgId = session.user.organizationId;
+  const isOwnerLike = session.user.role === Role.OWNER || session.user.role === Role.SUPER_ADMIN;
+  const audienceScope = input?.audienceScope ?? 'ALL';
+  let branchId = input?.branchId ?? session.user.branchId;
+
+  if (!isOwnerLike) {
+    branchId = session.user.branchId;
+    if (!isRoleInDiscussionScope(session.user.role, audienceScope)) {
+      throw new Error('Tidak punya akses ke diskusi ini');
+    }
+  }
+
+  const branch = await prisma.branch.findFirst({
+    where: { id: branchId, organizationId: orgId },
+    select: { id: true, name: true },
+  });
+  if (!branch) throw new Error('Cabang tidak ditemukan');
+
   let convo = await prisma.conversation.findFirst({
-    where: { type: 'STAFF_DISCUSSION', organizationId: session.user.organizationId },
+    where: {
+      type: 'STAFF_DISCUSSION',
+      organizationId: orgId,
+      branchId: branch.id,
+      audienceScope,
+    },
   });
   if (!convo) {
     convo = await prisma.conversation.create({
       data: {
-        organizationId: session.user.organizationId,
+        organizationId: orgId,
         type: 'STAFF_DISCUSSION',
-        title: 'Diskusi Tim',
+        branchId: branch.id,
+        audienceScope,
+        title: discussionTitle(branch.name, audienceScope),
       },
     });
   }
   return convo.id;
+}
+
+export async function listDiscussionBranches() {
+  const session = await requireAuth([Role.OWNER, Role.SUPER_ADMIN]);
+  return prisma.branch.findMany({
+    where: { organizationId: session.user.organizationId, isActive: true },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true, code: true },
+  });
 }
 
 export async function sendMessage(input: {
@@ -79,6 +122,7 @@ export async function sendMessage(input: {
     id: session.user.id,
     role: session.user.role as string,
     organizationId: session.user.organizationId,
+    branchId: session.user.branchId,
   };
 
   const convo = await getAccessibleConversation(user, input.conversationId);
@@ -114,14 +158,24 @@ export async function sendMessage(input: {
 }
 
 async function dispatchChatNotifications(
-  convo: { id: string; type: string; organizationId: string; customerId: string | null },
+  convo: {
+    id: string;
+    type: string;
+    organizationId: string;
+    customerId: string | null;
+    branchId?: string | null;
+    audienceScope?: string | null;
+  },
   sender: { id: string; role: string },
   preview: string
 ) {
   if (convo.type === 'STAFF_DISCUSSION') {
+    const scope = (convo.audienceScope ?? 'ALL') as DiscussionAudienceScope;
+    const targetRoles = rolesForDiscussionScope(scope);
     const roles = await prisma.userBranchRole.findMany({
       where: {
-        role: { in: [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.WORKER] },
+        role: { in: targetRoles },
+        ...(convo.branchId ? { branchId: convo.branchId } : {}),
         branch: { organizationId: convo.organizationId },
       },
       select: { userId: true },
@@ -181,5 +235,6 @@ async function dispatchChatNotifications(
       });
     }
   }
+  revalidatePath('/discussion');
   revalidatePath('/messages');
 }
