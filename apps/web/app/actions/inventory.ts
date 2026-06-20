@@ -369,7 +369,7 @@ export async function updateOpnameCash(input: {
   return prisma.stockOpname.update({
     where: { id: input.opnameId },
     data: {
-      cashExpected: input.cashExpected,
+      cashExpected,
       cashActual: input.cashActual,
       cashVariance,
       notes: input.notes ?? null,
