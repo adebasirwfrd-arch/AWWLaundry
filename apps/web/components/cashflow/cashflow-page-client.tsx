@@ -239,10 +239,27 @@ export function CashflowPageClient({
   return (
     <div className="space-y-6">
       {/* Summary cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
         <SummaryCard icon={ArrowUpCircle} label="Pemasukan" value={summary.totalIncome} color="text-rainbow-green" />
         <SummaryCard icon={ArrowDownCircle} label="Pengeluaran" value={summary.totalExpense} color="text-red-500" />
         <SummaryCard icon={Wallet} label="Net Cashflow" value={summary.netCashflow} color={summary.netCashflow >= 0 ? 'text-rainbow-cyan' : 'text-red-500'} />
+        <SummaryCard icon={Wallet} label="Nilai Kas" value={summary.expectedCash} color="text-brand-navy" subtitle="Saldo tunai sistem" />
+        <SummaryCard
+          icon={Scale}
+          label="Rekonsiliasi Aktual"
+          value={summary.actualCash ?? 0}
+          color="text-rainbow-cyan"
+          subtitle={summary.actualCash == null ? 'Belum diopname' : 'Kas fisik terakhir'}
+          muted={summary.actualCash == null}
+        />
+        <SummaryCard
+          icon={TrendingDown}
+          label="Selisih Kas"
+          value={summary.cashVariance ?? 0}
+          color={(summary.cashVariance ?? 0) === 0 ? 'text-rainbow-green' : 'text-amber-600'}
+          subtitle={(summary.cashVariance ?? 0) === 0 ? 'Sesuai' : 'Perlu review'}
+          muted={summary.cashVariance == null}
+        />
         <SummaryCard icon={Building2} label="CAPEX" value={summary.totalCapex} color="text-rainbow-purple" />
         <SummaryCard icon={TrendingDown} label="OPEX" value={summary.totalOpex} color="text-brand-orange" />
       </div>
@@ -281,6 +298,16 @@ export function CashflowPageClient({
             ))}
           </select>
         </div>
+        {branchId && (
+          <p className="ml-auto text-xs text-brand-navy/45">
+            Nilai kas untuk cabang terpilih
+          </p>
+        )}
+        {!branchId && showBranchFilter && (
+          <p className="ml-auto text-xs text-brand-navy/45">
+            Nilai kas = total semua cabang
+          </p>
+        )}
       </div>
 
       {/* Main tabs */}
@@ -457,20 +484,27 @@ function SummaryCard({
   label,
   value,
   color,
+  subtitle,
+  muted,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: number;
   color: string;
+  subtitle?: string;
+  muted?: boolean;
 }) {
   return (
     <div className="rounded-2xl border border-brand-navy/10 bg-white p-4 shadow-aww-sm">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
           <p className="text-xs text-brand-navy/50">{label}</p>
-          <p className={`font-display text-xl font-bold ${color}`}>{formatCurrency(value)}</p>
+          <p className={`font-display text-lg font-bold leading-tight sm:text-xl ${color}`}>
+            {muted ? '—' : formatCurrency(value)}
+          </p>
+          {subtitle && <p className="mt-0.5 truncate text-[11px] text-brand-navy/45">{subtitle}</p>}
         </div>
-        <Icon className={`h-8 w-8 ${color} opacity-70`} />
+        <Icon className={`h-8 w-8 shrink-0 ${color} opacity-70`} />
       </div>
     </div>
   );

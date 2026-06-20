@@ -153,9 +153,9 @@ export function InventoryDashboard({
   );
   const [branchId, setBranchId] = useState(initialBranchId);
   const [items, setItems] = useState(initialItems);
-  const [movements] = useState(initialMovements);
-  const [opnames] = useState(initialOpnames);
-  const [summary] = useState(initialSummary);
+  const [movements, setMovements] = useState(initialMovements);
+  const [opnames, setOpnames] = useState(initialOpnames);
+  const [summary, setSummary] = useState(initialSummary);
   const [pending, startTransition] = useTransition();
   const [cashLoading, setCashLoading] = useState(false);
 
@@ -223,6 +223,36 @@ export function InventoryDashboard({
       void fillExpectedCash();
     }
   }, [opnameStep, activeOpname, fillExpectedCash]);
+
+  useEffect(() => {
+    setBranchId(initialBranchId);
+    setItems(initialItems);
+    setMovements(initialMovements);
+    setOpnames(initialOpnames);
+    setSummary(initialSummary);
+    setActiveOpname(initialSummary.unfinishedOpname);
+    setOpnameStep(inferOpnameStep(initialSummary.unfinishedOpname, urlStep));
+    setMoveForm({ itemId: '', type: 'IN', qty: '', ref: '' });
+    setCashForm({
+      expected:
+        initialSummary.unfinishedOpname?.cashExpected != null
+          ? String(initialSummary.unfinishedOpname.cashExpected)
+          : String(initialSummary.expectedCash),
+      actual:
+        initialSummary.unfinishedOpname?.cashActual != null
+          ? String(initialSummary.unfinishedOpname.cashActual)
+          : '',
+      notes: initialSummary.unfinishedOpname?.notes ?? '',
+    });
+    setLineEdits({});
+  }, [
+    initialBranchId,
+    initialItems,
+    initialMovements,
+    initialOpnames,
+    initialSummary,
+    urlStep,
+  ]);
 
   const syncUrl = useCallback(
     (nextTab: Tab, nextStep?: OpnameStep) => {
@@ -494,8 +524,14 @@ export function InventoryDashboard({
           value={branchId}
           onChange={(e) => {
             const nextBranch = e.target.value;
-            setBranchId(nextBranch);
-            router.push(buildInventoryUrl(basePath, nextBranch, tab, tab === 'opname' ? opnameStep : undefined));
+            const href = buildInventoryUrl(
+              basePath,
+              nextBranch,
+              tab,
+              tab === 'opname' ? opnameStep : undefined
+            );
+            router.push(href);
+            router.refresh();
           }}
           options={branches.map((b) => ({ value: b.id, label: `${b.code} — ${b.name}` }))}
         />

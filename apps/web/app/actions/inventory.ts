@@ -13,6 +13,7 @@ import {
   dismissOpnameNotifications,
 } from '@/lib/opname-notifications';
 import { inferOpnameResumeStep } from '@/lib/opname-utils';
+import { computeExpectedBranchCash } from '@/lib/branch-cash-ledger';
 
 const INVENTORY_ROLES = [Role.OWNER, Role.MANAGER, Role.CASHIER];
 const INVENTORY_ADMIN_ROLES = [Role.OWNER, Role.MANAGER];
@@ -759,48 +760,6 @@ export async function cancelStockOpname(opnameId: string, branchId?: string) {
   revalidatePath('/cashier/inventory');
   revalidatePath('/cashier/inbox');
   return { ok: true };
-}
-
-function expenseNetAmount(row: { amount: number; discount?: number | null; netAmount?: number | null }) {
-  if (row.netAmount != null && row.netAmount > 0) return row.netAmount;
-  return Math.max(0, row.amount - (row.discount ?? 0));
-}
-
-/** Kas seharusnya = saldo opname terakhir + pembayaran tunai - pengeluaran tunai sejak opname disetujui. */
-async function computeExpectedBranchCash(branchId: string) {
-  const lastApproved = await prisma.stockOpname.findFirst({
-    where: { branchId, status: 'APPROVED', cashActual: { not: null } },
-    orderBy: { approvedAt: 'desc' },
-    select: { cashActual: true, approvedAt: true },
-  });
-
-  const openingBalance = lastApproved?.cashActual ?? 0;
-  const since = lastApproved?.approvedAt ?? new Date(0);
-
-  const [cashPayments, cashExpenses] = await Promise.all([
-    prisma.payment.aggregate({
-      where: {
-        branchId,
-        method: 'CASH',
-        status: 'PAID',
-        paidAt: { gt: since },
-      },
-      _sum: { amount: true },
-    }),
-    prisma.expense.findMany({
-      where: {
-        branchId,
-        paymentMethod: 'CASH',
-        date: { gt: since },
-      },
-      select: { amount: true, discount: true, netAmount: true },
-    }),
-  ]);
-
-  const payments = cashPayments._sum.amount ?? 0;
-  const expenses = cashExpenses.reduce((sum, row) => sum + expenseNetAmount(row), 0);
-
-  return Math.round(openingBalance + payments - expenses);
 }
 
 export async function getExpectedBranchCash(branchId?: string) {

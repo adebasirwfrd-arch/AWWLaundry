@@ -39,7 +39,7 @@ export default async function InventoryPage({
 
       <Suspense fallback={<p className="text-brand-navy/60">Memuat inventori...</p>}>
         <InventoryDashboard
-          key={`${branchId}-${summary.unfinishedOpname?.id ?? 'none'}-${summary.unfinishedOpname?.status ?? ''}`}
+          key={branchId}
           branches={branches}
           initialBranchId={branchId}
           items={items}

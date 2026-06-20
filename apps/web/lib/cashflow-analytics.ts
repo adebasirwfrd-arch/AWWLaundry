@@ -1,6 +1,7 @@
 import { prisma } from '@aww/database';
 import { periodRange, lastNDays, formatDayLabel, type DashboardPeriod } from '@/lib/date-buckets';
 import { daysInRange } from '@/lib/report-periods';
+import { getBranchCashSnapshot } from '@/lib/branch-cash-ledger';
 
 export interface CashflowFilters {
   organizationId: string;
@@ -173,6 +174,14 @@ export async function fetchCashflowOverview(filters: CashflowFilters) {
     .filter((e) => e.type === 'OPEX')
     .reduce((s, e) => s + rowExpenseNet(e), 0);
   const netCashflow = totalIncome - totalExpense;
+  const cashIncomePeriod =
+    paymentsByMethod.find((p) => p.method === 'CASH')?._sum.amount ?? 0;
+
+  const cashBranchIds =
+    filters.branchId || filters.managerBranchId
+      ? [filters.branchId || filters.managerBranchId!]
+      : branches.map((b) => b.id);
+  const cashLedger = await getBranchCashSnapshot(cashBranchIds);
 
   const branchMap = Object.fromEntries(branches.map((b) => [b.id, b.name]));
 
@@ -241,6 +250,10 @@ export async function fetchCashflowOverview(filters: CashflowFilters) {
       totalCapex,
       totalOpex,
       netCashflow,
+      cashIncomePeriod,
+      expectedCash: cashLedger.expectedCash,
+      actualCash: cashLedger.actualCash,
+      cashVariance: cashLedger.cashVariance,
       orderCount,
       totalWeight: weightAgg._sum.weightKg ?? 0,
       paymentCount: incomeAgg._count,
