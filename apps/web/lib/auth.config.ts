@@ -18,6 +18,7 @@ export const authConfig = {
         nextUrl.pathname.startsWith('/welcome') ||
         nextUrl.pathname.startsWith('/book') ||
         nextUrl.pathname.startsWith('/track') ||
+        nextUrl.pathname === '/manifest.webmanifest' ||
         nextUrl.pathname.startsWith('/api/v1/orders/track') ||
         nextUrl.pathname.startsWith('/api/v1/health') ||
         nextUrl.pathname.startsWith('/api/v1/cron') ||
