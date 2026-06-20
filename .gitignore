@@ -23,6 +23,7 @@ npm-debug.log*
 .DS_Store
 *.pem
 *.tsbuildinfo
+.turbo/
 
 # Local SQLite dev DB
 packages/database/prisma/dev.db
