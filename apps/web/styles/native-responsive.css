@@ -1,0 +1,131 @@
+/**
+ * Layout responsif khusus APK Android (WebView).
+ * Mengandalkan --native-vh/--native-vw yang disuntikkan dari React Native
+ * agar tinggi viewport akurat setelah rotasi (100dvh sering salah di WebView).
+ */
+
+html.native-app {
+  --app-vh: var(--native-vh, 100dvh);
+  --app-vw: var(--native-vw, 100vw);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+html.native-app body {
+  min-height: var(--app-vh);
+  overflow-x: hidden;
+}
+
+html.native-app .min-h-dvh {
+  min-height: var(--app-vh) !important;
+}
+
+html.native-app .h-dvh {
+  height: var(--app-vh) !important;
+}
+
+/* Teks tidak terpotong — izinkan wrap di native */
+html.native-app h1,
+html.native-app h2,
+html.native-app h3,
+html.native-app p,
+html.native-app span,
+html.native-app label {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* ── Landscape phone (tinggi pendek) ── */
+html.native-app.native-landscape {
+  /* Sembunyikan bottom nav — hemat ~4.5rem vertikal, pakai menu hamburger */
+}
+
+html.native-app.native-landscape [data-native-bottom-nav] {
+  display: none !important;
+}
+
+html.native-app.native-landscape [data-native-main] {
+  padding-bottom: max(1rem, var(--safe-bottom)) !important;
+}
+
+html.native-app.native-landscape [data-native-header] {
+  padding-top: max(0.35rem, var(--safe-top)) !important;
+  padding-bottom: 0.35rem !important;
+}
+
+html.native-app.native-landscape [data-native-page-title] {
+  font-size: 1.25rem !important;
+  line-height: 1.3 !important;
+}
+
+html.native-app.native-landscape [data-native-page-subtitle] {
+  font-size: 0.75rem !important;
+  line-height: 1.35 !important;
+}
+
+/* Dashboard: area konten bisa scroll di dalam flex */
+html.native-app [data-native-scroll-main] {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Landscape lebar (tablet / phone landscape): sidebar desktop */
+@media (orientation: landscape) and (min-width: 680px) {
+  html.native-app [data-dashboard-sidebar] {
+    display: flex !important;
+  }
+
+  html.native-app [data-dashboard-mobile-header] {
+    display: none !important;
+  }
+
+  html.native-app [data-dashboard-bottom-nav] {
+    display: none !important;
+  }
+
+  html.native-app [data-dashboard-content] {
+    margin-left: 16rem !important;
+  }
+
+  html.native-app [data-dashboard-main-inner] {
+    padding-bottom: 1.5rem !important;
+  }
+}
+
+/* POS: 2 kolom saat landscape cukup lebar */
+@media (orientation: landscape) and (min-width: 700px) {
+  html.native-app [data-pos-grid] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    align-items: start;
+  }
+}
+
+/* POS: landscape sempit — satu kolom scrollable */
+@media (orientation: landscape) and (max-width: 699px) {
+  html.native-app [data-pos-grid] {
+    grid-template-columns: minmax(0, 1fr) !important;
+    max-height: calc(var(--app-vh) - 5.5rem);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Chat / panel dengan tinggi calc — pakai viewport native */
+html.native-app [data-native-panel-height] {
+  height: calc(var(--app-vh) - 12rem) !important;
+  max-height: calc(var(--app-vh) - 12rem) !important;
+}
+
+html.native-app.native-landscape [data-native-panel-height] {
+  height: calc(var(--app-vh) - 6rem) !important;
+  max-height: calc(var(--app-vh) - 6rem) !important;
+}
+
+/* Customer: nav horizontal ringkas di landscape */
+html.native-app.native-landscape [data-customer-landscape-nav] {
+  display: flex !important;
+}

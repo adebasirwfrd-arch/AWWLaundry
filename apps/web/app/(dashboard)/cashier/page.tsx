@@ -29,8 +29,10 @@ export default async function CashierPage() {
   return (
     <DashboardShell user={session.user}>
       <div className="mb-6">
-        <h1 className="font-display text-3xl font-bold text-brand-navy">POS Kasir</h1>
-        <p className="text-brand-navy/60">Timbang → Catat → Print struk otomatis · {session.user.branchName}</p>
+        <h1 data-native-page-title className="font-display text-3xl font-bold text-brand-navy">POS Kasir</h1>
+        <p data-native-page-subtitle className="text-brand-navy/60">
+          Timbang → Catat → Print struk otomatis · {session.user.branchName}
+        </p>
       </div>
       <POSPanel
         services={servicesWithPrice}

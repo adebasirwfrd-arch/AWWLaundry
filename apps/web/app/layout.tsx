@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter, Plus_Jakarta_Sans } from 'next/font/google';
 import '@aww/design-tokens/css-variables.css';
 import './globals.css';
+import '../styles/native-responsive.css';
 import { Providers } from './providers';
 import { SplashScreen } from '@/components/animations/splash-screen';
 

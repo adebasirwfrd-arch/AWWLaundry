@@ -46,11 +46,11 @@
   }
 
   .pt-safe {
-    padding-top: env(safe-area-inset-top, 0px);
+    padding-top: var(--safe-top, env(safe-area-inset-top, 0px));
   }
 
   .pb-safe {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-bottom: var(--safe-bottom, env(safe-area-inset-bottom, 0px));
   }
 
   .pb-safe-offset {

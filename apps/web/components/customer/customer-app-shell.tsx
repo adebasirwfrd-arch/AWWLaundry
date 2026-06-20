@@ -28,9 +28,9 @@ export function CustomerAppShell({ children, user, loyaltyPoints = 0 }: Props) {
   const firstName = (user.name ?? 'Pelanggan').split(' ')[0];
 
   return (
-    <div className="relative min-h-dvh bg-white">
+    <div className="relative flex min-h-dvh min-h-0 flex-col bg-white">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-aww-header text-white shadow-aww-md pt-safe">
+      <header data-native-header className="sticky top-0 z-40 shrink-0 bg-aww-header text-white shadow-aww-md pt-safe">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3 lg:max-w-4xl">
           <Link href="/customer" className="flex items-center gap-2.5">
             <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-white shadow-aww-sm">
@@ -52,13 +52,47 @@ export function CustomerAppShell({ children, user, loyaltyPoints = 0 }: Props) {
         </div>
       </header>
 
+      {/* Nav ringkas landscape — ikon saja, hemat tinggi */}
+      <nav
+        data-customer-landscape-nav
+        className="hidden shrink-0 border-b border-brand-navy/10 bg-white px-2 py-1"
+        aria-label="Navigasi cepat"
+      >
+        <div className="mx-auto flex max-w-4xl items-center justify-around gap-1 overflow-x-auto">
+          {NAV.map((item) => {
+            const Icon = item.icon;
+            const active = pathname === item.href || (item.href !== '/customer' && pathname.startsWith(item.href));
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  'flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
+                  active ? 'bg-aww-rainbow text-white' : 'text-brand-navy/55'
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                <span className="whitespace-nowrap">{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+
       {/* Content */}
-      <main className="relative z-10 mx-auto max-w-2xl px-4 pb-[calc(7rem+env(safe-area-inset-bottom,0px))] pt-4 lg:max-w-4xl">
+      <main
+        data-native-scroll-main
+        data-native-main
+        className="relative z-10 mx-auto w-full max-w-2xl flex-1 px-4 pb-[calc(7rem+env(safe-area-inset-bottom,0px))] pt-4 lg:max-w-4xl"
+      >
         <PageTransition>{children}</PageTransition>
       </main>
 
-      {/* Bottom nav */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-brand-navy/10 bg-white pb-safe">
+      {/* Bottom nav — disembunyikan di landscape */}
+      <nav
+        data-native-bottom-nav
+        className="fixed inset-x-0 bottom-0 z-40 shrink-0 border-t border-brand-navy/10 bg-white pb-safe"
+      >
         <div className="mx-auto flex max-w-2xl items-stretch justify-around lg:max-w-4xl">
           {NAV.map((item) => {
             const Icon = item.icon;

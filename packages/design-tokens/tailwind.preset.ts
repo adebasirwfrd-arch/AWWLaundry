@@ -5,6 +5,9 @@ const preset: Partial<Config> = {
   darkMode: 'class',
   theme: {
     extend: {
+      screens: {
+        'landscape-short': { raw: '(orientation: landscape) and (max-height: 520px)' },
+      },
       colors: {
         brand: { ...palette.brand },
         rainbow: { ...palette.rainbow },

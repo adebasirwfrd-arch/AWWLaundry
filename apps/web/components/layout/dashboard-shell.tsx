@@ -182,11 +182,14 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
   );
 
   return (
-    <div className="relative flex min-h-dvh bg-aww-brand-hero">
+    <div className="relative flex min-h-dvh min-h-0 flex-col bg-aww-brand-hero">
       <RainbowBubbleField density="low" className="opacity-60" />
 
-      {/* Desktop sidebar */}
-      <aside className="fixed left-0 top-0 z-40 hidden h-full w-64 flex-col bg-aww-header text-white shadow-aww-lg lg:flex">
+      {/* Desktop sidebar — tampil di landscape lebar via native-responsive.css */}
+      <aside
+        data-dashboard-sidebar
+        className="fixed left-0 top-0 z-40 hidden h-full w-64 flex-col bg-aww-header text-white shadow-aww-lg lg:flex"
+      >
         <div className="flex items-center gap-3 border-b border-white/10 p-5">
           <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-aww-sm">
             <Image src="/brand/logo.png" alt="AWW Laundry" width={48} height={48} className="h-10 w-10 object-contain" />
@@ -231,9 +234,13 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
         </>
       )}
 
-      <div className="relative z-10 flex min-h-dvh flex-1 flex-col lg:ml-64">
+      <div data-dashboard-content className="relative z-10 flex min-h-dvh min-h-0 flex-1 flex-col lg:ml-64">
         {/* Mobile top bar */}
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-brand-navy/10 bg-white/80 px-4 py-3 backdrop-blur-md lg:hidden pt-safe">
+        <header
+          data-dashboard-mobile-header
+          data-native-header
+          className="sticky top-0 z-30 flex shrink-0 items-center justify-between gap-3 border-b border-brand-navy/10 bg-white/80 px-4 py-3 backdrop-blur-md lg:hidden pt-safe"
+        >
           <button
             type="button"
             onClick={() => setMenuOpen(true)}
@@ -252,18 +259,26 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
           </div>
         </header>
 
-        <main className="flex-1">
-          <div className="hidden items-center justify-end gap-3 px-6 pt-6 lg:flex xl:px-8">
+        <main data-native-scroll-main className="flex min-h-0 flex-1 flex-col">
+          <div className="hidden shrink-0 items-center justify-end gap-3 px-6 pt-6 lg:flex xl:px-8">
             <ThemeToggle />
             <NotificationBell role={user.role} />
           </div>
-          <div className="px-4 pb-24 pt-4 sm:px-6 lg:px-8 lg:pb-8 lg:pt-4">
+          <div
+            data-dashboard-main-inner
+            data-native-main
+            className="px-4 pb-24 pt-4 sm:px-6 lg:px-8 lg:pb-8 lg:pt-4"
+          >
             <PageTransition>{children}</PageTransition>
           </div>
         </main>
 
-        {/* Mobile bottom nav */}
-        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-brand-navy/10 bg-white/95 backdrop-blur-md lg:hidden pb-safe">
+        {/* Mobile bottom nav — disembunyikan di landscape via native-responsive.css */}
+        <nav
+          data-dashboard-bottom-nav
+          data-native-bottom-nav
+          className="fixed inset-x-0 bottom-0 z-30 shrink-0 border-t border-brand-navy/10 bg-white/95 backdrop-blur-md lg:hidden pb-safe"
+        >
           <div className="mx-auto flex max-w-lg items-stretch justify-around">
             {bottomNav.map((item) => {
               const Icon = item.icon;

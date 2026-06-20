@@ -1,22 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, BackHandler, Platform, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, BackHandler, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
 import * as NavigationBar from 'expo-navigation-bar';
 import * as SystemUI from 'expo-system-ui';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView, type WebViewNavigation } from 'react-native-webview';
 import { getNativeUserAgent } from './lib/user-agent';
-import { NATIVE_BOOTSTRAP_JS } from './lib/injected-native';
+import { buildSafeAreaInjectJs, NATIVE_BOOTSTRAP_JS } from './lib/injected-native';
 
 const APP_URL = (Constants.expoConfig?.extra?.appUrl as string | undefined) ?? 'https://aww-laundry.vercel.app';
 const APP_ORIGIN = APP_URL.replace(/\/$/, '');
-// Mulai dari root agar tiap peran diarahkan ke dashboard-nya sendiri (owner, kasir, pelanggan).
 const START_URL = `${APP_ORIGIN}/?native=1`;
 
-export default function App() {
+function AppContent() {
   const webRef = useRef<WebView>(null);
   const [canGoBack, setCanGoBack] = useState(false);
   const [loading, setLoading] = useState(true);
+  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
@@ -24,6 +26,11 @@ export default function App() {
     void NavigationBar.setBackgroundColorAsync('#FFFFFF');
     void NavigationBar.setButtonStyleAsync('dark');
   }, []);
+
+  // Sinkronkan safe-area & ukuran layar ke CSS WebView setiap rotasi/resize.
+  useEffect(() => {
+    webRef.current?.injectJavaScript(buildSafeAreaInjectJs(insets));
+  }, [insets.top, insets.bottom, insets.left, insets.right, width, height]);
 
   const onAndroidBack = useCallback(() => {
     if (canGoBack) {
@@ -53,7 +60,10 @@ export default function App() {
         injectedJavaScriptBeforeContentLoaded={NATIVE_BOOTSTRAP_JS}
         onNavigationStateChange={onNavigationStateChange}
         onLoadStart={() => setLoading(true)}
-        onLoadEnd={() => setLoading(false)}
+        onLoadEnd={() => {
+          setLoading(false);
+          webRef.current?.injectJavaScript(buildSafeAreaInjectJs(insets));
+        }}
         allowsBackForwardNavigationGestures
         pullToRefreshEnabled={false}
         sharedCookiesEnabled
@@ -64,6 +74,8 @@ export default function App() {
         setDisplayZoomControls={false}
         overScrollMode="never"
         allowsLinkPreview={false}
+        automaticallyAdjustContentInsets={false}
+        contentInsetAdjustmentBehavior="never"
         originWhitelist={['https://*', 'http://localhost:*']}
         style={styles.webview}
       />
@@ -73,6 +85,14 @@ export default function App() {
         </View>
       )}
     </View>
+  );
+}
+
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <AppContent />
+    </SafeAreaProvider>
   );
 }
 

@@ -29,6 +29,7 @@ const config: ExpoConfig = {
       backgroundColor: '#FAFAF8',
     },
     package: 'com.awwlaundry.app',
+    softwareKeyboardLayoutMode: 'resize',
   },
   web: {
     favicon: './assets/favicon.png',

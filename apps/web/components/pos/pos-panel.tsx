@@ -116,7 +116,7 @@ export function POSPanel({ services, branchName, branchPhone }: POSPanelProps) {
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div data-pos-grid className="grid gap-6 lg:grid-cols-2">
       <CelebrationBurst
         show={celebrate}
         title="Pembayaran Diterima!"
