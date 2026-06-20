@@ -37,9 +37,6 @@ export const authConfig = {
         return Response.redirect(login);
       }
 
-      if (isLoggedIn && isAuthPage) {
-        return Response.redirect(new URL('/', nextUrl));
-      }
       return true;
     },
     jwt({ token, user }) {
