@@ -24,7 +24,6 @@ export const authConfig = {
         nextUrl.pathname.startsWith('/api/v1/orders/track') ||
         nextUrl.pathname.startsWith('/api/v1/health') ||
         nextUrl.pathname.startsWith('/api/v1/cron') ||
-        nextUrl.pathname.startsWith('/api/v1/auth/mobile-google') ||
         nextUrl.pathname.startsWith('/api/auth');
 
       if (isPublic) return true;

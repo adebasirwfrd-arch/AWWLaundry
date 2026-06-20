@@ -13,11 +13,3 @@ export function isMobileAppWebView() {
 
   return false;
 }
-
-export function requestNativeGoogleAuth(callbackUrl: string) {
-  const bridge = (window as Window & { ReactNativeWebView?: { postMessage: (msg: string) => void } })
-    .ReactNativeWebView;
-  if (!bridge) return false;
-  bridge.postMessage(JSON.stringify({ type: 'google-auth', callbackUrl }));
-  return true;
-}

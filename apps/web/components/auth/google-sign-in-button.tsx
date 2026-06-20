@@ -3,7 +3,6 @@
 import { signIn } from 'next-auth/react';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { isMobileAppWebView, requestNativeGoogleAuth } from '@/lib/mobile-webview';
 
 function GoogleIcon({ className }: { className?: string }) {
   return (
@@ -42,9 +41,6 @@ export function GoogleSignInButton({
   async function handleGoogle() {
     setLoading(true);
     try {
-      if (isMobileAppWebView() && requestNativeGoogleAuth(callbackUrl)) {
-        return;
-      }
       await signIn('google', { callbackUrl });
     } finally {
       setLoading(false);
