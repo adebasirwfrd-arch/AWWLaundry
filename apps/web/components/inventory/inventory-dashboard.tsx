@@ -204,16 +204,15 @@ export function InventoryDashboard({
   const urlTab = (searchParams.get('tab') as Tab | null) ?? defaultTab;
   const urlStep = searchParams.get('step');
 
-  const tabs = useMemo(
-    () =>
-      [
-        { id: 'items' as const, label: 'Master Stok', icon: Package },
-        { id: 'movements' as const, label: 'Masuk/Keluar', icon: History },
-        { id: 'opname' as const, label: 'Stock Opname', icon: ClipboardCheck },
-        { id: 'history' as const, label: 'Riwayat Opname', icon: Wallet },
-      ],
-    []
-  );
+  const tabs = useMemo(() => {
+    const movementLabel = userRole === 'CASHIER' ? 'Masuk Stok' : 'Masuk/Keluar';
+    return [
+      { id: 'items' as const, label: 'Master Stok', icon: Package },
+      { id: 'movements' as const, label: movementLabel, icon: History },
+      { id: 'opname' as const, label: 'Stock Opname', icon: ClipboardCheck },
+      { id: 'history' as const, label: 'Riwayat Opname', icon: Wallet },
+    ];
+  }, [userRole]);
   const allowedTabs = useMemo(() => tabs.map((t) => t.id), [tabs]);
 
   const [tab, setTab] = useState<Tab>(() => {
@@ -391,12 +390,13 @@ export function InventoryDashboard({
   }
 
   function handleMovement() {
+    const movementType = isCashier ? 'IN' : moveForm.type;
     startTransition(async () => {
       try {
         await recordStockMovement({
           branchId,
           itemId: moveForm.itemId,
-          type: moveForm.type,
+          type: movementType,
           qty: parseFloat(moveForm.qty),
           reference: moveForm.ref || undefined,
         });
@@ -758,7 +758,14 @@ export function InventoryDashboard({
 
       {tab === 'movements' && (
         <Card>
-          <CardHeader><CardTitle>Catat Masuk / Keluar Stok</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>{isCashier ? 'Catat Masuk Stok' : 'Catat Masuk / Keluar Stok'}</CardTitle>
+            {isCashier && (
+              <p className="text-sm text-brand-navy/55">
+                Kasir hanya mencatat stok masuk. Pengurangan stok dilakukan melalui <strong>Stock Opname</strong>.
+              </p>
+            )}
+          </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Select
               label="Item"
@@ -766,15 +773,24 @@ export function InventoryDashboard({
               onChange={(e) => setMoveForm({ ...moveForm, itemId: e.target.value })}
               options={[{ value: '', label: 'Pilih item...' }, ...items.map((i) => ({ value: i.id, label: i.name }))]}
             />
-            <Select
-              label="Tipe"
-              value={moveForm.type}
-              onChange={(e) => setMoveForm({ ...moveForm, type: e.target.value as 'IN' | 'OUT' })}
-              options={[
-                { value: 'IN', label: 'Masuk (IN)' },
-                { value: 'OUT', label: 'Keluar (OUT)' },
-              ]}
-            />
+            {isCashier ? (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-brand-navy/70">Tipe</label>
+                <p className="flex h-10 items-center rounded-xl border border-brand-navy/10 bg-brand-navy/5 px-3 text-sm font-medium text-rainbow-green">
+                  Masuk (IN)
+                </p>
+              </div>
+            ) : (
+              <Select
+                label="Tipe"
+                value={moveForm.type}
+                onChange={(e) => setMoveForm({ ...moveForm, type: e.target.value as 'IN' | 'OUT' })}
+                options={[
+                  { value: 'IN', label: 'Masuk (IN)' },
+                  { value: 'OUT', label: 'Keluar (OUT)' },
+                ]}
+              />
+            )}
             <Input label="Jumlah" type="number" value={moveForm.qty} onChange={(e) => setMoveForm({ ...moveForm, qty: e.target.value })} />
             <Input label="Referensi" value={moveForm.ref} onChange={(e) => setMoveForm({ ...moveForm, ref: e.target.value })} placeholder="PO-001 / Pemakaian harian" />
             <Button onClick={handleMovement} disabled={pending || !moveForm.itemId || !moveForm.qty}>Catat</Button>

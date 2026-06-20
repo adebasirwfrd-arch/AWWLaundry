@@ -155,6 +155,9 @@ export async function recordStockMovement(input: {
   branchId?: string;
 }) {
   const { session, branchId, organizationId } = await inventoryCtx(input.branchId);
+  if (session.user.role === Role.CASHIER && input.type === 'OUT') {
+    throw new Error('Kasir hanya bisa mencatat stok masuk. Stok keluar melalui stock opname.');
+  }
   if (input.qty <= 0) throw new Error('Jumlah harus lebih dari 0');
 
   const item = await prisma.inventoryItem.findFirst({
