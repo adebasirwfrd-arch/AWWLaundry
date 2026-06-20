@@ -81,8 +81,7 @@ interface InventoryDashboardProps {
     lowStockCount: number;
     totalValue: number;
     lowStock: InventoryItem[];
-    activeOpname: StockOpname | null;
-    pendingApproval: StockOpname | null;
+    unfinishedOpname: StockOpname | null;
   };
   userRole: string;
 }
@@ -151,17 +150,15 @@ export function InventoryDashboard({
 
   const [moveForm, setMoveForm] = useState({ itemId: '', type: 'IN' as 'IN' | 'OUT', qty: '', ref: '' });
   const [opnameStep, setOpnameStep] = useState<OpnameStep>(() =>
-    inferOpnameStep(initialSummary.activeOpname, urlStep)
+    inferOpnameStep(initialSummary.unfinishedOpname, urlStep)
   );
   const [cashForm, setCashForm] = useState({
-    expected: initialSummary.activeOpname?.cashExpected != null ? String(initialSummary.activeOpname.cashExpected) : '',
-    actual: initialSummary.activeOpname?.cashActual != null ? String(initialSummary.activeOpname.cashActual) : '',
-    notes: initialSummary.activeOpname?.notes ?? '',
+    expected: initialSummary.unfinishedOpname?.cashExpected != null ? String(initialSummary.unfinishedOpname.cashExpected) : '',
+    actual: initialSummary.unfinishedOpname?.cashActual != null ? String(initialSummary.unfinishedOpname.cashActual) : '',
+    notes: initialSummary.unfinishedOpname?.notes ?? '',
   });
   const [lineEdits, setLineEdits] = useState<Record<string, string>>({});
-  const [activeOpname, setActiveOpname] = useState(
-    initialSummary.activeOpname ?? initialSummary.pendingApproval
-  );
+  const [activeOpname, setActiveOpname] = useState(initialSummary.unfinishedOpname);
 
   const isOwner = userRole === 'OWNER' || userRole === 'SUPER_ADMIN';
   const isPendingApproval = activeOpname?.status === 'PENDING_APPROVAL';
@@ -224,11 +221,30 @@ export function InventoryDashboard({
   function startOpname() {
     startTransition(async () => {
       try {
-        await createStockOpname(branchId);
-        toast.success('Sesi opname dimulai');
+        const created = await createStockOpname(branchId);
+        setActiveOpname({
+          id: created.id,
+          status: created.status,
+          period: created.period,
+          cashExpected: created.cashExpected,
+          cashActual: created.cashActual,
+          cashVariance: created.cashVariance,
+          notes: created.notes,
+          createdAt: created.createdAt,
+          lines: created.lines.map((l) => ({
+            id: l.id,
+            systemQty: l.systemQty,
+            physicalQty: l.physicalQty,
+            variance: l.variance,
+            varianceCost: l.varianceCost,
+            item: { name: l.item.name, unit: l.item.unit, sku: l.item.sku ?? null },
+          })),
+        });
         setTab('opname');
         setOpnameStep('count');
-        refreshData('opname', 'count');
+        syncUrl('opname', 'count');
+        toast.success('Sesi opname dimulai');
+        router.refresh();
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Gagal memulai opname');
       }
@@ -378,12 +394,10 @@ export function InventoryDashboard({
               ? 'Menunggu Owner'
               : activeOpname
                 ? 'Berjalan'
-                : initialSummary.pendingApproval
-                  ? 'Menunggu Owner'
-                  : 'Tidak ada'
+                : 'Tidak ada'
           }
           icon={ClipboardCheck}
-          warn={!!activeOpname || !!initialSummary.pendingApproval}
+          warn={!!activeOpname}
         />
       </div>
 
@@ -509,15 +523,23 @@ export function InventoryDashboard({
                 <ClipboardCheck className="mx-auto h-12 w-12 text-brand-orange" />
                 <h3 className="mt-3 font-display text-lg font-bold">Mulai Stock Opname</h3>
                 <p className="mt-1 text-sm text-brand-navy/60">
-                  Snapshot stok sistem → hitung fisik → rekonsiliasi kas → approve penyesuaian
+                  Snapshot stok sistem → hitung fisik → rekonsiliasi kas → ajukan persetujuan owner
                 </p>
                 <Button className="mt-4" onClick={startOpname} disabled={pending || items.length === 0}>
-                  Buat Sesi Opname Baru
+                  {pending ? 'Membuat sesi...' : 'Buat Sesi Opname Baru'}
                 </Button>
               </CardContent>
             </Card>
           ) : (
             <>
+              {activeOpname.status === 'PENDING_APPROVAL' && (
+                <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  Sesi opname ini <strong>menunggu persetujuan owner</strong>.
+                  {isOwner
+                    ? ' Anda dapat approve di sini atau di Kotak Masuk.'
+                    : ' Owner akan menerima email & notifikasi untuk review.'}
+                </div>
+              )}
               <div className="flex gap-2">
                 {(['count', 'cash', 'review'] as const).map((s, i) => (
                   <div

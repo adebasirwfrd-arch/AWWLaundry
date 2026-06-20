@@ -190,7 +190,17 @@ export async function createStockOpname(branchId?: string) {
   const draft = await prisma.stockOpname.findFirst({
     where: { branchId: bid, status: { in: ['DRAFT', 'COUNTING', 'PENDING_APPROVAL'] } },
   });
-  if (draft) throw new Error('Masih ada opname yang belum selesai');
+  if (draft) {
+    const statusLabel =
+      draft.status === 'PENDING_APPROVAL'
+        ? 'menunggu persetujuan owner'
+        : draft.status === 'COUNTING'
+          ? 'sedang berjalan'
+          : 'belum selesai';
+    throw new Error(
+      `Opname ${statusLabel}. Lanjutkan sesi yang ada di tab Stock Opname, atau batalkan terlebih dahulu.`
+    );
+  }
 
   const items = await prisma.inventoryItem.findMany({
     where: { branchId: bid },
@@ -505,12 +515,9 @@ export async function getInventorySummary(branchId?: string) {
 
   const lowStock = items.filter((i) => i.currentStock <= i.minStock);
   const totalValue = items.reduce((s, i) => s + i.currentStock * (i.unitCost ?? 0), 0);
-  const activeOpname = await prisma.stockOpname.findFirst({
-    where: { branchId: bid, status: { in: ['DRAFT', 'COUNTING'] } },
-    include: { lines: { include: { item: { select: { name: true, unit: true, sku: true } } } } },
-  });
-  const pendingApproval = await prisma.stockOpname.findFirst({
-    where: { branchId: bid, status: 'PENDING_APPROVAL' },
+  const unfinishedOpname = await prisma.stockOpname.findFirst({
+    where: { branchId: bid, status: { in: ['DRAFT', 'COUNTING', 'PENDING_APPROVAL'] } },
+    orderBy: { createdAt: 'desc' },
     include: { lines: { include: { item: { select: { name: true, unit: true, sku: true } } } } },
   });
 
@@ -519,7 +526,6 @@ export async function getInventorySummary(branchId?: string) {
     lowStockCount: lowStock.length,
     totalValue,
     lowStock,
-    activeOpname,
-    pendingApproval,
+    unfinishedOpname,
   };
 }
