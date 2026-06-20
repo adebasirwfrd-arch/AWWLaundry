@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
+import { isMobileAppWebView } from '@/lib/mobile-webview';
 
 const RAINBOW = ['#FF5C9A', '#FF8C2A', '#FFD23F', '#6BCB77', '#4ECDC4', '#4A90D9', '#9B59B6'];
 
@@ -22,7 +23,8 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (reduced) return;
+    // Di app native, lewati animasi fade supaya konten dijamin terlihat (tidak stuck transparan).
+    if (reduced || isMobileAppWebView()) return;
     const overlay = overlayRef.current;
     const content = contentRef.current;
     if (!overlay || !content) return;

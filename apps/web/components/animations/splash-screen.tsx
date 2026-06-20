@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { AnimatedLogo } from '@/components/brand/animated-logo';
 import { RainbowBubbleField } from '@/components/animations/rainbow-bubble-field';
+import { isMobileAppWebView } from '@/lib/mobile-webview';
 
 /**
  * Splash screen — logo reveal with rainbow bubbles, shown once per session.
@@ -15,6 +16,8 @@ export function SplashScreen() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    // Native app sudah punya splash screen sendiri (Expo) — jangan tampilkan overlay web.
+    if (isMobileAppWebView()) return;
     const path = window.location.pathname;
     if (path.startsWith('/login') || path.startsWith('/register') || path.startsWith('/forgot-password') || path.startsWith('/reset-password')) return;
     const seen = sessionStorage.getItem('aww-splash-seen');
@@ -22,6 +25,13 @@ export function SplashScreen() {
     setVisible(true);
     sessionStorage.setItem('aww-splash-seen', '1');
   }, []);
+
+  // Safety net: apa pun yang terjadi dengan animasi, splash wajib hilang.
+  useEffect(() => {
+    if (!visible) return;
+    const fallback = window.setTimeout(() => setVisible(false), 4000);
+    return () => window.clearTimeout(fallback);
+  }, [visible]);
 
   useEffect(() => {
     if (!visible) return;
