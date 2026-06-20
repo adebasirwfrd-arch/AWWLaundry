@@ -1,0 +1,147 @@
+/**
+ * AWW Laundry — CSS Custom Properties
+ * Theme: Rainbow Bubbles (from official logo)
+ */
+
+:root {
+  /* ── Brand (from logo) ── */
+  --aww-brand-navy: #1E3A6E;
+  --aww-brand-orange: #FF8C2A;
+  --aww-brand-pink: #FF5C9A;
+  --aww-brand-sky: #5BC0EB;
+  --aww-brand-cream: #FAFAF8;
+
+  /* ── Rainbow Spectrum ── */
+  --aww-rainbow-pink: #FF5C9A;
+  --aww-rainbow-orange: #FF8C2A;
+  --aww-rainbow-yellow: #FFD23F;
+  --aww-rainbow-green: #6BCB77;
+  --aww-rainbow-cyan: #4ECDC4;
+  --aww-rainbow-blue: #4A90D9;
+  --aww-rainbow-purple: #9B59B6;
+
+  /* ── Semantic ── */
+  --aww-background: var(--aww-brand-cream);
+  --aww-background-alt: #F5F9FF;
+  --aww-surface: #FFFFFF;
+  --aww-surface-muted: rgba(91, 192, 235, 0.12);
+  --aww-text-primary: var(--aww-brand-navy);
+  --aww-text-secondary: #3D5A80;
+  --aww-text-muted: #7A9BB8;
+  --aww-text-inverse: #FFFFFF;
+  --aww-border: rgba(30, 58, 110, 0.12);
+  --aww-brand-primary: var(--aww-brand-navy);
+  --aww-brand-accent: var(--aww-brand-orange);
+
+  /* ── Gradients ── */
+  --aww-gradient-brand-hero: linear-gradient(
+    160deg,
+    var(--aww-brand-cream) 0%,
+    rgba(255, 92, 154, 0.08) 25%,
+    rgba(78, 205, 196, 0.12) 50%,
+    rgba(74, 144, 217, 0.10) 75%,
+    rgba(155, 89, 182, 0.06) 100%
+  );
+  --aww-gradient-rainbow: linear-gradient(
+    135deg,
+    var(--aww-rainbow-pink) 0%,
+    var(--aww-rainbow-orange) 17%,
+    var(--aww-rainbow-yellow) 33%,
+    var(--aww-rainbow-green) 50%,
+    var(--aww-rainbow-cyan) 67%,
+    var(--aww-rainbow-blue) 83%,
+    var(--aww-rainbow-purple) 100%
+  );
+  --aww-gradient-header: linear-gradient(
+    135deg,
+    var(--aww-brand-navy) 0%,
+    #2A4F8C 70%,
+    var(--aww-rainbow-blue) 100%
+  );
+  --aww-gradient-cta: linear-gradient(
+    135deg,
+    #FF9F4D 0%,
+    var(--aww-brand-orange) 50%,
+    #F57C00 100%
+  );
+  --aww-gradient-payment: linear-gradient(
+    120deg,
+    var(--aww-rainbow-green) 0%,
+    var(--aww-rainbow-cyan) 40%,
+    var(--aww-rainbow-pink) 100%
+  );
+  --aww-gradient-card: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(91, 192, 235, 0.08) 100%
+  );
+  --aww-gradient-bubble: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.9) 0%,
+    rgba(255, 92, 154, 0.4) 20%,
+    rgba(78, 205, 196, 0.5) 50%,
+    rgba(74, 144, 217, 0.4) 80%,
+    rgba(255, 255, 255, 0.7) 100%
+  );
+
+  /* ── Bubble glow shadows ── */
+  --aww-shadow-sm: 0 2px 8px rgba(30, 58, 110, 0.08);
+  --aww-shadow-md: 0 4px 20px rgba(30, 58, 110, 0.12);
+  --aww-shadow-lg: 0 8px 40px rgba(30, 58, 110, 0.16);
+  --aww-shadow-glow-rainbow: 0 4px 30px rgba(255, 92, 154, 0.25), 0 0 20px rgba(78, 205, 196, 0.20);
+  --aww-shadow-glow-orange: 0 4px 24px rgba(255, 140, 42, 0.40);
+  --aww-shadow-glow-bubble: 0 2px 16px rgba(91, 192, 235, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+
+  /* ── Radius ── */
+  --aww-radius-sm: 8px;
+  --aww-radius-md: 12px;
+  --aww-radius-lg: 16px;
+  --aww-radius-xl: 24px;
+  --aww-radius-bubble: 50%;
+
+  /* ── Animation ── */
+  --aww-bubble-float-duration: 3.5s;
+  --aww-rainbow-shift-duration: 6s;
+}
+
+[data-theme='dark'] {
+  --aww-background: #0F1F3D;
+  --aww-background-alt: #172E55;
+  --aww-surface: #1E3A6E;
+  --aww-text-primary: var(--aww-brand-cream);
+  --aww-text-secondary: #B8D4E8;
+  --aww-border: rgba(91, 192, 235, 0.20);
+  --aww-brand-primary: var(--aww-rainbow-cyan);
+}
+
+/* Rainbow border animation utility */
+@keyframes aww-rainbow-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes aww-bubble-float {
+  0%, 100% { transform: translateY(0) translateX(0) scale(1); }
+  33% { transform: translateY(-20px) translateX(8px) scale(1.05); }
+  66% { transform: translateY(-8px) translateX(-6px) scale(0.95); }
+}
+
+@keyframes aww-bubble-shimmer {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.7; }
+}
+
+.aww-rainbow-border {
+  background: var(--aww-gradient-rainbow);
+  background-size: 200% 200%;
+  animation: aww-rainbow-shift var(--aww-rainbow-shift-duration) ease infinite;
+}
+
+.aww-bubble-float {
+  animation: aww-bubble-float var(--aww-bubble-float-duration) ease-in-out infinite;
+}
+
+.aww-bubble-shimmer {
+  animation: aww-bubble-shimmer 2.5s ease-in-out infinite;
+}

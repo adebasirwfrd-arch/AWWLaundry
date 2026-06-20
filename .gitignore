@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment — JANGAN commit secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
+
+# Next.js / Expo
+.next/
+out/
+dist/
+.expo/
+web-build/
+
+# Debug
+npm-debug.log*
+.DS_Store
+*.pem
+*.tsbuildinfo
+
+# Local SQLite dev DB
+packages/database/prisma/dev.db
+*.db
+
+# Google OAuth client JSON (jangan commit)
+client_secret*.json
+
+# Uploads lokal (dev fallback)
+apps/web/public/uploads/
+apps/web/tmp/
+
+# IDE
+.idea/
+.vscode/

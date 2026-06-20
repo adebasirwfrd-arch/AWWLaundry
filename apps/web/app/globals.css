@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-aww-border;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply min-h-dvh bg-aww-brand-hero font-sans text-brand-navy antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+  }
+}
+
+@layer utilities {
+  .rainbow-border-active {
+    background: var(--aww-gradient-rainbow);
+    background-size: 200% 200%;
+    animation: aww-rainbow-shift var(--aww-rainbow-shift-duration) ease infinite;
+    @apply rounded-aww-xl p-[2px];
+  }
+
+  .glass-card {
+    @apply rounded-2xl border border-white/60 bg-white/60 shadow-aww-md backdrop-blur-xl;
+  }
+
+  .text-gradient-rainbow {
+    @apply bg-aww-rainbow bg-clip-text text-transparent;
+  }
+
+  .min-h-dvh {
+    min-height: 100dvh;
+  }
+
+  .h-dvh {
+    height: 100dvh;
+  }
+
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .pb-safe-offset {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* ── Thermal receipt printing (80mm) ── */
+.thermal-receipt {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  /* Hide everything */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* Show only the thermal receipt */
+  .thermal-receipt,
+  .thermal-receipt * {
+    visibility: visible !important;
+  }
+
+  .thermal-receipt {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80mm;
+    padding: 4mm 5mm;
+    margin: 0;
+    color: #000;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  /* Hide animated background layers during print */
+  #aww-burst-layer,
+  [aria-hidden='true'] {
+    display: none !important;
+  }
+}

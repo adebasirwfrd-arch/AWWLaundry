@@ -1,0 +1,618 @@
+// AWW Laundry — Prisma Schema Blueprint
+// PostgreSQL 16
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ───────────────────────────────────────────────
+
+enum Role {
+  SUPER_ADMIN
+  OWNER
+  MANAGER
+  CASHIER
+  WORKER
+  CUSTOMER
+}
+
+enum OrderStatus {
+  RECEIVED
+  WASHING
+  DRYING
+  IRONING
+  FOLDING
+  READY
+  PICKED_UP
+  DELIVERED
+  CANCELLED
+  ON_HOLD
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIAL
+  PAID
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  QRIS
+  BANK_TRANSFER
+  GOPAY
+  SHOPEEPAY
+  OVO
+  DANA
+}
+
+enum MachineStatus {
+  IDLE
+  RUNNING
+  TROUBLE
+  MAINTENANCE
+  OFFLINE
+}
+
+enum MachineEventType {
+  STARTED
+  COMPLETED
+  TROUBLE_REPORTED
+  TROUBLE_RESOLVED
+  MAINTENANCE
+}
+
+enum StockMovementType {
+  IN
+  OUT
+  ADJUSTMENT
+}
+
+enum AuditAction {
+  ORDER_CREATED
+  ORDER_STATUS_CHANGED
+  ORDER_CANCELLED
+  PAYMENT_RECEIVED
+  PAYMENT_REFUNDED
+  PRICE_OVERRIDE
+  DISCOUNT_APPLIED
+  USER_LOGIN
+  USER_LOGOUT
+  PERMISSION_CHANGED
+  MACHINE_TROUBLE_REPORTED
+  MACHINE_RESOLVED
+  STOCK_OPNAME_CREATED
+  STOCK_ADJUSTED
+  EXPENSE_CREATED
+  EXPENSE_DELETED
+  SETTINGS_CHANGED
+  REPORT_GENERATED
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+}
+
+enum AIConversationType {
+  CHATBOT
+  BUSINESS_ANALYSIS
+}
+
+// ─── MULTI-TENANT ────────────────────────────────────────
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logoUrl   String?  @map("logo_url")
+  settings  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  branches         Branch[]
+  users            User[]
+  customers        Customer[]
+  serviceTypes     ServiceType[]
+  reportSchedules  ReportSchedule[]
+  auditLogs        AuditLog[]
+
+  @@map("organizations")
+}
+
+model Branch {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  address        String?
+  phone          String?
+  settings       Json     @default("{}")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization      Organization        @relation(fields: [organizationId], references: [id])
+  userBranchRoles   UserBranchRole[]
+  orders            Order[]
+  machines          Machine[]
+  payments          Payment[]
+  expenses          Expense[]
+  inventoryItems    InventoryItem[]
+  stockOpnames      StockOpname[]
+  dailySummaries    DailyBranchSummary[]
+  auditLogs         AuditLog[]
+  branchPricing     BranchPricing[]
+
+  @@index([organizationId])
+  @@map("branches")
+}
+
+model User {
+  id               String       @id @default(cuid())
+  organizationId   String       @map("organization_id")
+  email            String       @unique
+  passwordHash     String?      @map("password_hash")
+  name             String
+  phone            String?
+  avatarUrl        String?      @map("avatar_url")
+  authProvider     AuthProvider @default(EMAIL) @map("auth_provider")
+  googleId         String?      @unique @map("google_id")
+  profileCompleted Boolean      @default(false) @map("profile_completed")
+  emailVerified    Boolean      @default(false) @map("email_verified")
+  preferences      Json         @default("{}")
+  paymentSettings  Json         @default("{}") @map("payment_settings")
+  lastLoginAt      DateTime?    @map("last_login_at")
+  isActive         Boolean      @default(true) @map("is_active")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  organization     Organization     @relation(fields: [organizationId], references: [id])
+  branchRoles      UserBranchRole[]
+  accounts         Account[]
+  sessions         Session[]
+  ordersCreated    Order[]          @relation("OrderCreatedBy")
+  statusChanges    OrderStatusLog[]
+  paymentsReceived Payment[]        @relation("PaymentReceivedBy")
+  machineReports   MachineLog[]
+  expenses         Expense[]
+  auditLogs        AuditLog[]
+  aiConversations  AIConversation[]
+  notifications    Notification[]
+
+  @@index([organizationId])
+  @@index([googleId])
+  @@map("users")
+}
+
+// Auth.js adapter tables
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model UserBranchRole {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  branchId    String   @map("branch_id")
+  role        Role
+  permissions String[] @default([])
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, branchId])
+  @@map("user_branch_roles")
+}
+
+// ─── CUSTOMERS ───────────────────────────────────────────
+
+model Customer {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  phone          String
+  email          String?
+  address        String?
+  loyaltyPoints  Int      @default(0) @map("loyalty_points")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  orders       Order[]
+
+  @@unique([organizationId, phone])
+  @@index([organizationId])
+  @@map("customers")
+}
+
+// ─── PRICING ─────────────────────────────────────────────
+
+model ServiceType {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  pricePerKg     Decimal  @map("price_per_kg") @db.Decimal(10, 2)
+  estimatedHours Int      @default(24) @map("estimated_hours")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization  Organization    @relation(fields: [organizationId], references: [id])
+  orders        Order[]
+  branchPricing BranchPricing[]
+
+  @@map("service_types")
+}
+
+model BranchPricing {
+  id            String  @id @default(cuid())
+  branchId      String  @map("branch_id")
+  serviceTypeId String  @map("service_type_id")
+  pricePerKg    Decimal @map("price_per_kg") @db.Decimal(10, 2)
+
+  branch      Branch      @relation(fields: [branchId], references: [id])
+  serviceType ServiceType @relation(fields: [serviceTypeId], references: [id])
+
+  @@unique([branchId, serviceTypeId])
+  @@map("branch_pricing")
+}
+
+// ─── ORDERS ──────────────────────────────────────────────
+
+model Order {
+  id               String        @id @default(cuid())
+  branchId         String        @map("branch_id")
+  customerId       String        @map("customer_id")
+  orderNumber      String        @unique @map("order_number")
+  weightKg         Decimal       @map("weight_kg") @db.Decimal(6, 2)
+  serviceTypeId    String        @map("service_type_id")
+  subtotal         Decimal       @db.Decimal(12, 2)
+  discount         Decimal       @default(0) @db.Decimal(12, 2)
+  total            Decimal       @db.Decimal(12, 2)
+  status           OrderStatus   @default(RECEIVED)
+  paymentStatus    PaymentStatus @default(UNPAID) @map("payment_status")
+  estimatedReadyAt DateTime?     @map("estimated_ready_at")
+  readyAt          DateTime?     @map("ready_at")
+  pickedUpAt       DateTime?     @map("picked_up_at")
+  createdById      String        @map("created_by_id")
+  notes            String?
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  branch       Branch           @relation(fields: [branchId], references: [id])
+  customer     Customer         @relation(fields: [customerId], references: [id])
+  serviceType  ServiceType      @relation(fields: [serviceTypeId], references: [id])
+  createdBy    User             @relation("OrderCreatedBy", fields: [createdById], references: [id])
+  statusLogs   OrderStatusLog[]
+  items        OrderItem[]
+  payments     Payment[]
+
+  @@index([branchId, status, createdAt(sort: Desc)])
+  @@index([customerId, createdAt(sort: Desc)])
+  @@index([branchId, createdAt])
+  @@map("orders")
+}
+
+model OrderStatusLog {
+  id         String       @id @default(cuid())
+  orderId    String       @map("order_id")
+  fromStatus OrderStatus? @map("from_status")
+  toStatus   OrderStatus  @map("to_status")
+  changedById String      @map("changed_by_id")
+  note       String?
+  createdAt  DateTime     @default(now()) @map("created_at")
+
+  order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  changedBy User  @relation(fields: [changedById], references: [id])
+
+  @@index([orderId, createdAt])
+  @@index([changedById, createdAt])
+  @@map("order_status_logs")
+}
+
+model OrderItem {
+  id          String  @id @default(cuid())
+  orderId     String  @map("order_id")
+  description String
+  qty         Int     @default(1)
+  unitPrice   Decimal @map("unit_price") @db.Decimal(10, 2)
+  total       Decimal @db.Decimal(10, 2)
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_items")
+}
+
+// ─── PAYMENTS ────────────────────────────────────────────
+
+model Payment {
+  id           String        @id @default(cuid())
+  orderId      String        @map("order_id")
+  branchId     String        @map("branch_id")
+  amount       Decimal       @db.Decimal(12, 2)
+  method       PaymentMethod
+  gatewayRef   String?       @map("gateway_ref")
+  status       PaymentStatus @default(PAID)
+  paidAt       DateTime      @default(now()) @map("paid_at")
+  receivedById String        @map("received_by_id")
+  proofUrl     String?       @map("proof_url")
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  order      Order  @relation(fields: [orderId], references: [id])
+  branch     Branch @relation(fields: [branchId], references: [id])
+  receivedBy User   @relation("PaymentReceivedBy", fields: [receivedById], references: [id])
+
+  @@index([branchId, paidAt])
+  @@index([orderId])
+  @@map("payments")
+}
+
+// ─── MACHINES ────────────────────────────────────────────
+
+model Machine {
+  id              String        @id @default(cuid())
+  branchId        String        @map("branch_id")
+  name            String
+  type            String
+  capacityKg      Decimal?      @map("capacity_kg") @db.Decimal(6, 2)
+  status          MachineStatus @default(IDLE)
+  lastMaintenance DateTime?     @map("last_maintenance")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  branch Branch       @relation(fields: [branchId], references: [id])
+  logs   MachineLog[]
+
+  @@index([branchId, status])
+  @@map("machines")
+}
+
+model MachineLog {
+  id           String           @id @default(cuid())
+  machineId    String           @map("machine_id")
+  eventType    MachineEventType @map("event_type")
+  reportedById String?          @map("reported_by_id")
+  note         String?
+  photoUrl     String?          @map("photo_url")
+  resolvedAt   DateTime?        @map("resolved_at")
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  machine    Machine @relation(fields: [machineId], references: [id])
+  reportedBy User?   @relation(fields: [reportedById], references: [id])
+
+  @@index([machineId, createdAt(sort: Desc)])
+  @@map("machine_logs")
+}
+
+// ─── INVENTORY ───────────────────────────────────────────
+
+model InventoryItem {
+  id       String  @id @default(cuid())
+  branchId String  @map("branch_id")
+  name     String
+  unit     String
+  minStock Decimal @default(0) @map("min_stock") @db.Decimal(10, 2)
+  currentStock Decimal @default(0) @map("current_stock") @db.Decimal(10, 2)
+
+  branch    Branch          @relation(fields: [branchId], references: [id])
+  movements StockMovement[]
+  opnameLines StockOpnameLine[]
+
+  @@index([branchId])
+  @@map("inventory_items")
+}
+
+model StockMovement {
+  id        String            @id @default(cuid())
+  itemId    String            @map("item_id")
+  type      StockMovementType
+  qty       Decimal           @db.Decimal(10, 2)
+  reference String?
+  createdById String?         @map("created_by_id")
+  createdAt DateTime          @default(now()) @map("created_at")
+
+  item InventoryItem @relation(fields: [itemId], references: [id])
+
+  @@index([itemId, createdAt])
+  @@map("stock_movements")
+}
+
+model StockOpname {
+  id          String   @id @default(cuid())
+  branchId    String   @map("branch_id")
+  period      DateTime @db.Date
+  status      String   @default("DRAFT")
+  cashExpected Decimal? @map("cash_expected") @db.Decimal(14, 2)
+  cashActual   Decimal? @map("cash_actual") @db.Decimal(14, 2)
+  cashVariance Decimal? @map("cash_variance") @db.Decimal(14, 2)
+  approvedById String? @map("approved_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  branch Branch            @relation(fields: [branchId], references: [id])
+  lines  StockOpnameLine[]
+
+  @@index([branchId, period])
+  @@map("stock_opnames")
+}
+
+model StockOpnameLine {
+  id           String  @id @default(cuid())
+  opnameId     String  @map("opname_id")
+  itemId       String  @map("item_id")
+  systemQty    Decimal @map("system_qty") @db.Decimal(10, 2)
+  physicalQty  Decimal @map("physical_qty") @db.Decimal(10, 2)
+  variance     Decimal @db.Decimal(10, 2)
+  varianceCost Decimal? @map("variance_cost") @db.Decimal(12, 2)
+
+  opname StockOpname   @relation(fields: [opnameId], references: [id], onDelete: Cascade)
+  item   InventoryItem @relation(fields: [itemId], references: [id])
+
+  @@map("stock_opname_lines")
+}
+
+// ─── FINANCE ─────────────────────────────────────────────
+
+model Expense {
+  id          String   @id @default(cuid())
+  branchId    String   @map("branch_id")
+  category    String
+  amount      Decimal  @db.Decimal(12, 2)
+  description String?
+  date        DateTime @db.Date
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  branch    Branch @relation(fields: [branchId], references: [id])
+  createdBy User   @relation(fields: [createdById], references: [id])
+
+  @@index([branchId, date])
+  @@map("expenses")
+}
+
+model DailyBranchSummary {
+  id       String   @id @default(cuid())
+  branchId String   @map("branch_id")
+  date     DateTime @db.Date
+  metrics  Json
+
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@unique([branchId, date])
+  @@map("daily_branch_summaries")
+}
+
+// ─── AUDIT ───────────────────────────────────────────────
+
+model AuditLog {
+  id             String      @id @default(cuid())
+  organizationId String      @map("organization_id")
+  branchId       String?     @map("branch_id")
+  userId         String?     @map("user_id")
+  action         AuditAction
+  entityType     String      @map("entity_type")
+  entityId       String      @map("entity_id")
+  oldValue       Json?       @map("old_value")
+  newValue       Json?       @map("new_value")
+  ipAddress      String?     @map("ip_address")
+  userAgent      String?     @map("user_agent")
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  branch       Branch?      @relation(fields: [branchId], references: [id])
+  user         User?        @relation(fields: [userId], references: [id])
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([branchId, createdAt(sort: Desc)])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+// ─── NOTIFICATIONS ───────────────────────────────────────
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  type      String
+  title     String
+  body      String
+  data      Json      @default("{}")
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+// ─── REPORTS ─────────────────────────────────────────────
+
+model ReportSchedule {
+  id              String   @id @default(cuid())
+  organizationId  String   @map("organization_id")
+  dayOfMonth      Int      @map("day_of_month")
+  sendTime        String   @default("08:00") @map("send_time")
+  timezone        String   @default("Asia/Jakarta")
+  recipientEmails String[] @map("recipient_emails")
+  branchIds       String[] @map("branch_ids")
+  sections        String[] @default([])
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  history      ReportHistory[]
+
+  @@map("report_schedules")
+}
+
+model ReportHistory {
+  id         String   @id @default(cuid())
+  scheduleId String   @map("schedule_id")
+  period     String
+  fileUrl    String?  @map("file_url")
+  status     String
+  sentAt     DateTime? @map("sent_at")
+  error      String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  schedule ReportSchedule @relation(fields: [scheduleId], references: [id])
+
+  @@map("report_history")
+}
+
+// ─── AI ──────────────────────────────────────────────────
+
+model AIConversation {
+  id        String             @id @default(cuid())
+  userId    String             @map("user_id")
+  type      AIConversationType
+  title     String?
+  messages  Json               @default("[]")
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, type, updatedAt(sort: Desc)])
+  @@map("ai_conversations")
+}

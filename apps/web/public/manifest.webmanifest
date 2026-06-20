@@ -1,0 +1,20 @@
+{
+  "name": "AWW Laundry",
+  "short_name": "AWW Laundry",
+  "description": "Platform manajemen franchise laundry — FRESH • CLEAN • FUN",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#FAFAF8",
+  "theme_color": "#1E3A6E",
+  "lang": "id",
+  "icons": [
+    {
+      "src": "/brand/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity"]
+}

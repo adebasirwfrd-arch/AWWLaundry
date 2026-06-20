@@ -1,0 +1,14 @@
+{
+  "name": "@aww/design-tokens",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./colors": "./colors.ts",
+    "./gradients": "./gradients.ts",
+    "./css-variables.css": "./css-variables.css",
+    "./tailwind.preset": "./tailwind.preset.ts"
+  }
+}

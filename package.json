@@ -1,0 +1,28 @@
+{
+  "name": "aww-laundry",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "postinstall": "npm run db:generate -w @aww/database",
+    "db:generate": "turbo db:generate",
+    "db:push": "turbo db:push",
+    "db:seed": "turbo db:seed",
+    "db:studio": "npm run db:studio -w @aww/database",
+    "test:cashflow-report": "npm run test:cashflow-report -w @aww/web --"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0",
+    "typescript": "^5.7.2"
+  },
+  "packageManager": "npm@10.8.0",
+  "dependencies": {
+    "@prisma/client": "^6.19.3"
+  }
+}
