@@ -2,6 +2,7 @@ import type { Config } from 'tailwindcss';
 import { palette } from './colors';
 
 const preset: Partial<Config> = {
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {

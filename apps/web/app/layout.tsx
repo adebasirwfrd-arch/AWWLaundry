@@ -33,9 +33,14 @@ export const metadata: Metadata = {
   },
 };
 
+const themeInitScript = `(function(){try{var p=localStorage.getItem('aww-theme')||'system';var d=p==='dark'||(p==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);var r=document.documentElement;r.classList.toggle('dark',d);r.setAttribute('data-theme',d?'dark':'light');r.style.colorScheme=d?'dark':'light';}catch(e){}})();`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="id" className={`${inter.variable} ${plusJakarta.variable}`}>
+    <html lang="id" className={`${inter.variable} ${plusJakarta.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body className="min-h-dvh font-sans antialiased">
         <SplashScreen />
         <Providers>{children}</Providers>

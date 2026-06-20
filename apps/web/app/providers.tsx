@@ -5,6 +5,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ClickBubbleBurst } from '@/components/animations/click-bubble-burst';
 import { NativeAppBootstrap } from '@/components/native-app-bootstrap';
+import { ThemeProvider } from '@/components/theme/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
 import { createAppQueryClient } from '@/lib/query-client';
 
@@ -13,12 +14,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <SessionProvider>
-      <QueryClientProvider client={queryClient}>
-        <NativeAppBootstrap />
-        <ClickBubbleBurst />
-        <Toaster />
-        {children}
-      </QueryClientProvider>
+      <ThemeProvider>
+        <QueryClientProvider client={queryClient}>
+          <NativeAppBootstrap />
+          <ClickBubbleBurst />
+          <Toaster />
+          {children}
+        </QueryClientProvider>
+      </ThemeProvider>
     </SessionProvider>
   );
 }

@@ -7,7 +7,9 @@
 export const palette = {
   /** Warna inti dari logo AWW Laundry */
   brand: {
-    navy: '#1E3A6E',       // outline huruf, "LAUN", border
+    // "Tinta" utama — pakai CSS variable agar otomatis flip saat dark mode
+    // (mencakup semua varian opacity: text-brand-navy/55, border-brand-navy/10, dll).
+    navy: 'rgb(var(--c-brand-navy) / <alpha-value>)',
     orange: '#FF8C2A',     // "DRY" — CTA utama
     pink: '#FF5C9A',       // "FRESH", sparkle, rainbow arc
     sky: '#5BC0EB',        // water splash, "FRANCHISE"

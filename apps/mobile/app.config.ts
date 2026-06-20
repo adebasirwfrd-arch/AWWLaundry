@@ -4,9 +4,9 @@ const config: ExpoConfig = {
   name: 'AWW Laundry',
   slug: 'aww-laundry',
   version: '1.0.0',
-  orientation: 'portrait',
+  orientation: 'default',
   icon: './assets/icon.png',
-  userInterfaceStyle: 'light',
+  userInterfaceStyle: 'automatic',
   newArchEnabled: true,
   scheme: 'awwlaundry',
   androidStatusBar: {

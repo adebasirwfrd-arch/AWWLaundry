@@ -4,6 +4,13 @@
  */
 
 :root {
+  /* ── Tinta utama (RGB channels untuk Tailwind alpha) ── */
+  --c-brand-navy: 30 58 110;
+  /* ── Permukaan dark mode (dipakai oleh override .dark) ── */
+  --c-surface: 22 38 67;
+  --c-surface-elevated: 30 49 84;
+  color-scheme: light;
+
   /* ── Brand (from logo) ── */
   --aww-brand-navy: #1E3A6E;
   --aww-brand-orange: #FF8C2A;
@@ -104,14 +111,42 @@
   --aww-rainbow-shift-duration: 6s;
 }
 
+html.dark,
 [data-theme='dark'] {
-  --aww-background: #0F1F3D;
-  --aww-background-alt: #172E55;
-  --aww-surface: #1E3A6E;
+  color-scheme: dark;
+
+  /* Tinta dibalik jadi terang → semua text/border brand-navy ikut terang */
+  --c-brand-navy: 226 235 246;
+  --c-surface: 22 38 67;
+  --c-surface-elevated: 30 49 84;
+
+  --aww-background: #0B1A33;
+  --aww-background-alt: #122847;
+  --aww-surface: #16284A;
+  --aww-surface-muted: rgba(91, 192, 235, 0.10);
   --aww-text-primary: var(--aww-brand-cream);
   --aww-text-secondary: #B8D4E8;
-  --aww-border: rgba(91, 192, 235, 0.20);
+  --aww-text-muted: #8AA6C2;
+  --aww-border: rgba(255, 255, 255, 0.12);
   --aww-brand-primary: var(--aww-rainbow-cyan);
+
+  /* Hero gradient versi gelap */
+  --aww-gradient-brand-hero: linear-gradient(
+    160deg,
+    #0B1A33 0%,
+    rgba(255, 92, 154, 0.06) 30%,
+    rgba(78, 205, 196, 0.08) 60%,
+    rgba(74, 144, 217, 0.08) 100%
+  );
+  --aww-gradient-card: linear-gradient(
+    145deg,
+    rgba(30, 49, 84, 0.95) 0%,
+    rgba(78, 205, 196, 0.08) 100%
+  );
+
+  --aww-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --aww-shadow-md: 0 4px 20px rgba(0, 0, 0, 0.45);
+  --aww-shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.55);
 }
 
 /* Rainbow border animation utility */

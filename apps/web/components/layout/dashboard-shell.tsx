@@ -28,6 +28,7 @@ import { Role, ROLE_LABELS } from '@aww/shared';
 import { RainbowBubbleField } from '@/components/animations/rainbow-bubble-field';
 import { PageTransition } from '@/components/animations/page-transition';
 import { NotificationBell } from '@/components/layout/notification-bell';
+import { ThemeToggle } from '@/components/theme/theme-toggle';
 
 interface NavItem {
   href: string;
@@ -245,11 +246,15 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
             <Image src="/brand/logo.png" alt="AWW Laundry" width={32} height={32} className="h-8 w-8 object-contain" />
             <span className="font-display text-sm font-bold text-brand-navy">AWW Laundry</span>
           </Link>
-          <NotificationBell role={user.role} />
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <NotificationBell role={user.role} />
+          </div>
         </header>
 
         <main className="flex-1">
           <div className="hidden items-center justify-end gap-3 px-6 pt-6 lg:flex xl:px-8">
+            <ThemeToggle />
             <NotificationBell role={user.role} />
           </div>
           <div className="px-4 pb-24 pt-4 sm:px-6 lg:px-8 lg:pb-8 lg:pt-4">

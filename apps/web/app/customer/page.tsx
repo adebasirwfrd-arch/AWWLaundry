@@ -40,7 +40,7 @@ export default async function CustomerHomePage() {
       {/* Service categories */}
       <section>
         <h2 className="mb-3 font-display text-lg font-bold text-brand-navy">Layanan Kami</h2>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {catalog.map((cat, i) => (
             <Reveal key={cat.slug} delay={i * 0.06}>
               <ServiceCategoryCard

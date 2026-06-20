@@ -67,6 +67,55 @@
   }
 }
 
+/* ── Dark mode surface overrides ──
+   Tinta (brand-navy) sudah otomatis flip via CSS var. Di sini kita balik
+   permukaan putih & background cream tanpa mengubah ratusan komponen. */
+html.dark body {
+  background: var(--aww-gradient-brand-hero);
+  color: rgb(var(--c-brand-navy));
+}
+
+html.dark .bg-white,
+html.dark .bg-white\/95,
+html.dark .bg-white\/90,
+html.dark .bg-white\/80,
+html.dark .bg-white\/70,
+html.dark .bg-white\/60 {
+  background-color: rgb(var(--c-surface)) !important;
+}
+
+/* Background cream literal (halaman error / unauthorized / auth) */
+html.dark .bg-\[\#FAFAF8\],
+html.dark .bg-\[\#FAFAF8\]\/95,
+html.dark .bg-brand-cream {
+  background-color: #0B1A33 !important;
+}
+
+/* Permukaan kartu yang sedikit lebih terang untuk pemisahan */
+html.dark .glass-card {
+  background-color: rgba(30, 49, 84, 0.6) !important;
+  border-color: rgba(255, 255, 255, 0.10) !important;
+}
+
+/* Tombol/badge navy solid tetap gelap (teks putih tetap terbaca) */
+html.dark .bg-brand-navy {
+  background-color: #16284A !important;
+}
+
+/* Input & form controls */
+html.dark input,
+html.dark textarea,
+html.dark select {
+  background-color: rgb(var(--c-surface-elevated)) !important;
+  color: rgb(var(--c-brand-navy)) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: rgba(226, 235, 246, 0.45) !important;
+}
+
 /* ── Thermal receipt printing (80mm) ── */
 .thermal-receipt {
   display: none;
