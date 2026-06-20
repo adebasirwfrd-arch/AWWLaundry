@@ -7,10 +7,12 @@ import { createAuditLog } from '@/lib/audit';
 import {
   notifyOpnameApproved,
   notifyOpnameRejected,
+  notifyOpnameRevisionRequested,
   notifyOpnameSubmittedForApproval,
 } from '@/lib/opname-notifications';
 
-const INVENTORY_ROLES = [Role.OWNER, Role.MANAGER];
+const INVENTORY_ROLES = [Role.OWNER, Role.MANAGER, Role.CASHIER];
+const INVENTORY_ADMIN_ROLES = [Role.OWNER, Role.MANAGER];
 
 function isApprover(role: Role) {
   return role === Role.OWNER || role === Role.SUPER_ADMIN;
@@ -18,7 +20,8 @@ function isApprover(role: Role) {
 
 async function inventoryCtx(branchId?: string) {
   const session = await requireAuth(INVENTORY_ROLES);
-  const targetBranchId = branchId ?? session.user.branchId;
+  const targetBranchId =
+    session.user.role === Role.CASHIER ? session.user.branchId : (branchId ?? session.user.branchId);
   const branch = await prisma.branch.findFirst({
     where: { id: targetBranchId, organizationId: session.user.organizationId },
   });
@@ -75,6 +78,9 @@ export async function upsertInventoryItem(input: {
   currentStock?: number;
 }) {
   const { session, branchId, organizationId } = await inventoryCtx(input.branchId);
+  if (session.user.role === Role.CASHIER) {
+    throw new Error('Kasir tidak dapat menambah item master');
+  }
 
   if (input.id) {
     const existing = await prisma.inventoryItem.findFirst({
@@ -93,8 +99,9 @@ export async function upsertInventoryItem(input: {
         minStock: input.minStock,
       },
     });
-    revalidatePath('/owner/inventory');
-    return updated;
+  revalidatePath('/owner/inventory');
+  revalidatePath('/cashier/inventory');
+  return updated;
   }
 
   const item = await prisma.inventoryItem.create({
@@ -132,6 +139,7 @@ export async function upsertInventoryItem(input: {
   );
 
   revalidatePath('/owner/inventory');
+  revalidatePath('/cashier/inventory');
   return item;
 }
 
@@ -180,6 +188,7 @@ export async function recordStockMovement(input: {
   );
 
   revalidatePath('/owner/inventory');
+  revalidatePath('/cashier/inventory');
   return { ok: true, newStock };
 }
 
@@ -248,6 +257,7 @@ export async function createStockOpname(branchId?: string) {
   );
 
   revalidatePath('/owner/inventory');
+  revalidatePath('/cashier/inventory');
   return opname;
 }
 
@@ -353,45 +363,65 @@ export async function submitStockOpnameForApproval(opnameId: string, branchId?: 
   }).catch(() => {});
 
   revalidatePath('/owner/inventory');
+  revalidatePath('/cashier/inventory');
   revalidatePath('/cashier/inbox');
   return { ok: true };
 }
 
 /** List opname menunggu approve — untuk kotak masuk owner. */
 export async function listPendingOpnameApprovals(branchId?: string) {
-  const session = await requireAuth([...INVENTORY_ROLES, Role.CASHIER, Role.SUPER_ADMIN]);
-  const bid = branchId ?? session.user.branchId;
+  const session = await requireAuth([...INVENTORY_ROLES, Role.SUPER_ADMIN]);
 
-  return prisma.stockOpname.findMany({
-    where: { branchId: bid, status: 'PENDING_APPROVAL' },
+  const where =
+    isApprover(session.user.role as Role) && !branchId
+      ? { status: 'PENDING_APPROVAL' as const, branch: { organizationId: session.user.organizationId } }
+      : {
+          status: 'PENDING_APPROVAL' as const,
+          branchId:
+            session.user.role === Role.CASHIER ? session.user.branchId : (branchId ?? session.user.branchId),
+        };
+
+  const rows = await prisma.stockOpname.findMany({
+    where,
     orderBy: { createdAt: 'desc' },
     include: {
       branch: { select: { name: true, code: true } },
-      lines: { include: { item: { select: { name: true, unit: true } } } },
+      lines: { include: { item: { select: { name: true, unit: true, sku: true } } } },
     },
   });
+
+  const creatorIds = [...new Set(rows.map((r) => r.createdById).filter(Boolean))] as string[];
+  const creators =
+    creatorIds.length > 0
+      ? await prisma.user.findMany({ where: { id: { in: creatorIds } }, select: { id: true, name: true } })
+      : [];
+  const creatorMap = new Map(creators.map((c) => [c.id, c.name]));
+
+  return rows.map((o) => ({
+    ...o,
+    submittedBy: o.createdById ? (creatorMap.get(o.createdById) ?? null) : null,
+  }));
 }
 
 /** Step 4b: Owner approve — sesuaikan stok & catat pergerakan. */
 export async function approveStockOpname(opnameId: string, branchId?: string) {
   const session = await requireAuth([...INVENTORY_ROLES, Role.SUPER_ADMIN]);
-  const bid = branchId ?? session.user.branchId;
   const organizationId = session.user.organizationId;
 
   if (!isApprover(session.user.role as Role)) {
     throw new Error('Hanya owner yang dapat menyetujui stock opname');
   }
 
-  const branch = await prisma.branch.findFirst({
-    where: { id: bid, organizationId },
-  });
-  if (!branch) throw new Error('Cabang tidak ditemukan');
-
   const opname = await prisma.stockOpname.findFirst({
-    where: { id: opnameId, branchId: bid },
+    where: {
+      id: opnameId,
+      branch: { organizationId },
+      ...(branchId ? { branchId } : {}),
+    },
     include: { lines: { include: { item: true } } },
   });
   if (!opname) throw new Error('Opname tidak ditemukan');
+  const bid = opname.branchId;
   if (!['COUNTING', 'PENDING_APPROVAL'].includes(opname.status)) {
     throw new Error('Opname sudah disetujui atau dibatalkan');
   }
@@ -455,6 +485,7 @@ export async function approveStockOpname(opnameId: string, branchId?: string) {
   }).catch(() => {});
 
   revalidatePath('/owner/inventory');
+  revalidatePath('/cashier/inventory');
   revalidatePath('/cashier/inbox');
   return { ok: true };
 }
@@ -462,16 +493,21 @@ export async function approveStockOpname(opnameId: string, branchId?: string) {
 /** Owner tolak opname yang diajukan. */
 export async function rejectStockOpname(opnameId: string, reason?: string, branchId?: string) {
   const session = await requireAuth([...INVENTORY_ROLES, Role.SUPER_ADMIN]);
-  const bid = branchId ?? session.user.branchId;
 
   if (!isApprover(session.user.role as Role)) {
     throw new Error('Hanya owner yang dapat menolak stock opname');
   }
 
   const opname = await prisma.stockOpname.findFirst({
-    where: { id: opnameId, branchId: bid, status: 'PENDING_APPROVAL' },
+    where: {
+      id: opnameId,
+      status: 'PENDING_APPROVAL',
+      branch: { organizationId: session.user.organizationId },
+      ...(branchId ? { branchId } : {}),
+    },
   });
   if (!opname) throw new Error('Opname tidak ditemukan');
+  const bid = opname.branchId;
 
   await prisma.stockOpname.update({
     where: { id: opnameId },
@@ -487,8 +523,110 @@ export async function rejectStockOpname(opnameId: string, reason?: string, branc
   }).catch(() => {});
 
   revalidatePath('/owner/inventory');
+  revalidatePath('/cashier/inventory');
   revalidatePath('/cashier/inbox');
   return { ok: true };
+}
+
+/** Owner kembalikan opname ke kasir untuk revisi. */
+export async function requestOpnameRevision(opnameId: string, note: string, branchId?: string) {
+  const session = await requireAuth([...INVENTORY_ROLES, Role.SUPER_ADMIN]);
+
+  if (!isApprover(session.user.role as Role)) {
+    throw new Error('Hanya owner yang dapat meminta revisi');
+  }
+  if (!note.trim()) throw new Error('Catatan revisi wajib diisi');
+
+  const opname = await prisma.stockOpname.findFirst({
+    where: {
+      id: opnameId,
+      status: 'PENDING_APPROVAL',
+      branch: { organizationId: session.user.organizationId },
+      ...(branchId ? { branchId } : {}),
+    },
+  });
+  if (!opname) throw new Error('Opname tidak ditemukan');
+
+  await prisma.stockOpname.update({
+    where: { id: opnameId },
+    data: {
+      status: 'COUNTING',
+      notes: `Revisi diminta: ${note.trim()}`,
+    },
+  });
+
+  void notifyOpnameRevisionRequested({
+    branchId: opname.branchId,
+    opnameId,
+    requestedByName: session.user.name ?? 'Owner',
+    note: note.trim(),
+    createdById: opname.createdById,
+  }).catch(() => {});
+
+  revalidatePath('/owner/inventory');
+  revalidatePath('/cashier/inventory');
+  revalidatePath('/cashier/inbox');
+  return { ok: true };
+}
+
+/** Detail opname untuk modal riwayat / inbox. */
+export async function getStockOpnameDetail(opnameId: string) {
+  const session = await requireAuth([...INVENTORY_ROLES, Role.SUPER_ADMIN]);
+
+  const opname = await prisma.stockOpname.findFirst({
+    where: {
+      id: opnameId,
+      branch: { organizationId: session.user.organizationId },
+    },
+    include: {
+      branch: { select: { name: true, code: true } },
+      lines: {
+        include: {
+          item: { select: { name: true, unit: true, sku: true } },
+        },
+      },
+    },
+  });
+  if (!opname) throw new Error('Opname tidak ditemukan');
+
+  if (session.user.role === Role.CASHIER && opname.branchId !== session.user.branchId) {
+    throw new Error('Akses ditolak');
+  }
+
+  let submittedBy: string | null = null;
+  if (opname.createdById) {
+    const creator = await prisma.user.findUnique({
+      where: { id: opname.createdById },
+      select: { name: true },
+    });
+    submittedBy = creator?.name ?? null;
+  }
+
+  return {
+    id: opname.id,
+    status: opname.status,
+    period: opname.period,
+    createdAt: opname.createdAt,
+    branchName: opname.branch.name,
+    branchCode: opname.branch.code,
+    submittedBy,
+    cashExpected: opname.cashExpected,
+    cashActual: opname.cashActual,
+    cashVariance: opname.cashVariance,
+    notes: opname.notes,
+    lineCount: opname.lines.length,
+    totalVarianceCost: opname.lines.reduce((s, l) => s + Math.abs(l.varianceCost ?? 0), 0),
+    lines: opname.lines.map((l) => ({
+      id: l.id,
+      name: l.item.name,
+      unit: l.item.unit,
+      sku: l.item.sku,
+      systemQty: l.systemQty,
+      physicalQty: l.physicalQty,
+      variance: l.variance,
+      varianceCost: l.varianceCost,
+    })),
+  };
 }
 
 export async function cancelStockOpname(opnameId: string, branchId?: string) {
@@ -505,6 +643,7 @@ export async function cancelStockOpname(opnameId: string, branchId?: string) {
   });
 
   revalidatePath('/owner/inventory');
+  revalidatePath('/cashier/inventory');
   revalidatePath('/cashier/inbox');
   return { ok: true };
 }

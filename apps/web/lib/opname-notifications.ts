@@ -1,6 +1,6 @@
 import { prisma, Role } from '@aww/database';
 import { formatCurrency } from '@aww/shared';
-import { getAppUrl } from '@/lib/env';
+import { getAppUrl, getOwnerNotificationEmail } from '@/lib/env';
 import { sendStockOpnamePendingEmail } from '@/lib/brevo';
 import { createNotification, notifyBranchRoles } from '@/lib/notify';
 
@@ -31,7 +31,7 @@ export async function notifyOpnameSubmittedForApproval(params: {
 }) {
   const owners = await getBranchOwners(params.branchId);
   const appUrl = getAppUrl();
-  const inboxUrl = `${appUrl}/cashier/inbox#opname`;
+  const inboxUrl = `${appUrl}/cashier/inbox?opname=${params.opnameId}#opname`;
   const periodLabel = new Date().toLocaleDateString('id-ID', {
     weekday: 'long',
     day: 'numeric',
@@ -52,8 +52,27 @@ export async function notifyOpnameSubmittedForApproval(params: {
     excludeUserId: params.excludeUserId,
   });
 
+  const emailed = new Set<string>();
+
+  const defaultOwnerEmail = getOwnerNotificationEmail();
+  if (defaultOwnerEmail && !emailed.has(defaultOwnerEmail)) {
+    emailed.add(defaultOwnerEmail);
+    void sendStockOpnamePendingEmail({
+      to: defaultOwnerEmail,
+      name: 'Owner AWW Laundry',
+      branchName: params.branchName,
+      submittedBy: params.submittedByName,
+      periodLabel,
+      lineCount: params.lineCount,
+      totalVarianceCost: params.totalVarianceCost,
+      cashVariance: params.cashVariance,
+      inboxUrl,
+    }).catch((err) => console.error('[Opname email]', err));
+  }
+
   for (const owner of owners) {
-    if (owner.id === params.excludeUserId) continue;
+    if (owner.id === params.excludeUserId || emailed.has(owner.email)) continue;
+    emailed.add(owner.email);
     void sendStockOpnamePendingEmail({
       to: owner.email,
       name: owner.name,
@@ -99,6 +118,24 @@ export async function notifyOpnameRejected(params: {
     type: 'STOCK_OPNAME_REJECTED',
     title: 'Stock opname ditolak',
     body: `Opname ditolak oleh ${params.rejectedByName}${params.reason ? `: ${params.reason}` : '.'}`,
+    data: { opnameId: params.opnameId, branchId: params.branchId },
+  });
+}
+
+export async function notifyOpnameRevisionRequested(params: {
+  branchId: string;
+  opnameId: string;
+  requestedByName: string;
+  note: string;
+  createdById?: string | null;
+}) {
+  if (!params.createdById) return;
+
+  await createNotification({
+    userId: params.createdById,
+    type: 'STOCK_OPNAME_REVISION',
+    title: 'Stock opname perlu revisi',
+    body: `${params.requestedByName} meminta revisi: ${params.note}`,
     data: { opnameId: params.opnameId, branchId: params.branchId },
   });
 }

@@ -47,6 +47,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/discussion', label: 'Diskusi', icon: MessagesSquare, roles: [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.WORKER] },
   { href: '/owner/analytics', label: 'Analitik', icon: BarChart3, roles: [Role.OWNER, Role.MANAGER] },
   { href: '/owner/inventory', label: 'Stok', icon: Package, roles: [Role.OWNER, Role.MANAGER] },
+  { href: '/cashier/inventory', label: 'Stok', icon: Package, roles: [Role.CASHIER] },
   { href: '/owner/customers', label: 'Pelanggan', icon: Users, roles: [Role.OWNER, Role.MANAGER, Role.CASHIER] },
   { href: '/owner/admin-console', label: 'Admin Console', icon: Settings2, roles: [Role.OWNER, Role.SUPER_ADMIN] },
 ];

@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { prisma, Role } from '@aww/database';
 import { requireAuth } from '@/lib/session';
@@ -52,7 +53,9 @@ export default async function CashierInboxPage() {
             messages: { orderBy: { createdAt: 'desc' }, take: 1 },
           },
         }),
-    listPendingOpnameApprovals(session.user.branchId),
+    listPendingOpnameApprovals(
+      canApproveOpname ? undefined : session.user.branchId
+    ),
   ]);
 
   return (
@@ -115,29 +118,33 @@ export default async function CashierInboxPage() {
                 </span>
               )}
             </h2>
-            <InboxOpnameApprovals
-              canApprove={canApproveOpname}
-              opnames={pendingOpnames.map((o) => ({
-                id: o.id,
-                period: o.period.toISOString(),
-                cashExpected: o.cashExpected,
-                cashActual: o.cashActual,
-                cashVariance: o.cashVariance,
-                notes: o.notes,
-                createdAt: o.createdAt.toISOString(),
-                branchName: o.branch.name,
-                branchCode: o.branch.code,
-                lineCount: o.lines.length,
-                totalVarianceCost: o.lines.reduce((s, l) => s + Math.abs(l.varianceCost ?? 0), 0),
-                lines: o.lines.map((l) => ({
-                  name: l.item.name,
-                  unit: l.item.unit,
-                  systemQty: l.systemQty,
-                  physicalQty: l.physicalQty,
-                  variance: l.variance,
-                })),
-              }))}
-            />
+            <Suspense fallback={<p className="text-sm text-brand-navy/50">Memuat opname...</p>}>
+              <InboxOpnameApprovals
+                canApprove={canApproveOpname}
+                opnames={pendingOpnames.map((o) => ({
+                  id: o.id,
+                  period: o.period.toISOString(),
+                  cashExpected: o.cashExpected,
+                  cashActual: o.cashActual,
+                  cashVariance: o.cashVariance,
+                  notes: o.notes,
+                  createdAt: o.createdAt.toISOString(),
+                  branchName: o.branch.name,
+                  branchCode: o.branch.code,
+                  submittedBy: o.submittedBy,
+                  lineCount: o.lines.length,
+                  totalVarianceCost: o.lines.reduce((s, l) => s + Math.abs(l.varianceCost ?? 0), 0),
+                  lines: o.lines.map((l) => ({
+                    name: l.item.name,
+                    unit: l.item.unit,
+                    sku: l.item.sku,
+                    systemQty: l.systemQty,
+                    physicalQty: l.physicalQty,
+                    variance: l.variance,
+                  })),
+                }))}
+              />
+            </Suspense>
           </section>
 
           <section id="ulasan">

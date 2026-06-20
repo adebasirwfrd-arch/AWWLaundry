@@ -42,6 +42,10 @@ export function getBrevoConfig() {
   };
 }
 
+export function getOwnerNotificationEmail() {
+  return process.env.OWNER_NOTIFICATION_EMAIL ?? 'ade.basirwfrd@gmail.com';
+}
+
 export function isWhatsAppConfigured() {
   return !!(
     (process.env.FONNTE_API_KEY && !process.env.FONNTE_API_KEY.startsWith('your_')) ||

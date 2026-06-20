@@ -11,7 +11,10 @@ import { toast } from '@/lib/toast';
 
 function linkFor(type: string, data: string): string {
   try {
-    const parsed = JSON.parse(data) as { orderId?: string };
+    const parsed = JSON.parse(data) as { orderId?: string; opnameId?: string };
+    if (parsed.opnameId && type === 'STOCK_OPNAME_PENDING') {
+      return `/cashier/inbox?opname=${parsed.opnameId}#opname`;
+    }
     if (parsed.orderId && type === 'ORDER_RECEIVED') {
       return `/orders/${parsed.orderId}`;
     }
@@ -21,7 +24,10 @@ function linkFor(type: string, data: string): string {
   if (type === 'ORDER_REVIEW') return '/cashier/inbox#ulasan';
   if (type === 'ORDER_CONFIRMATION') return '/cashier/inbox';
   if (type === 'STOCK_OPNAME_PENDING') return '/cashier/inbox#opname';
-  if (type === 'STOCK_OPNAME_APPROVED' || type === 'STOCK_OPNAME_REJECTED') return '/owner/inventory?tab=history';
+  if (type === 'STOCK_OPNAME_REVISION') return '/cashier/inventory?tab=opname';
+  if (type === 'STOCK_OPNAME_APPROVED' || type === 'STOCK_OPNAME_REJECTED') {
+    return '/owner/inventory?tab=history';
+  }
   if (type === 'CHAT_CUSTOMER') return '/messages';
   if (type === 'CHAT_STAFF') return '/discussion';
   return '#';

@@ -20,12 +20,14 @@ import {
   approveStockOpname,
   cancelStockOpname,
   createStockOpname,
+  getStockOpnameDetail,
   recordStockMovement,
   submitStockOpnameForApproval,
   updateOpnameCash,
   updateOpnameLine,
   upsertInventoryItem,
 } from '@/app/actions/inventory';
+import { OpnameDetailModal, type OpnameDetailData } from '@/components/inventory/opname-detail-modal';
 import { toast } from '@/lib/toast';
 
 type InventoryItem = {
@@ -84,6 +86,10 @@ interface InventoryDashboardProps {
     unfinishedOpname: StockOpname | null;
   };
   userRole: string;
+  lockBranch?: boolean;
+  branchLabel?: string;
+  defaultTab?: Tab;
+  basePath?: string;
 }
 
 type Tab = 'items' | 'movements' | 'opname' | 'history';
@@ -106,11 +112,13 @@ function inferOpnameStep(activeOpname: StockOpname | null, urlStep: string | nul
   return 'count';
 }
 
-function buildInventoryUrl(branchId: string, tab?: Tab, step?: OpnameStep) {
-  const params = new URLSearchParams({ branch: branchId });
+function buildInventoryUrl(basePath: string, branchId: string, tab?: Tab, step?: OpnameStep, lockBranch?: boolean) {
+  const params = new URLSearchParams();
+  if (!lockBranch) params.set('branch', branchId);
   if (tab) params.set('tab', tab);
   if (step) params.set('step', step);
-  return `/owner/inventory?${params.toString()}`;
+  const qs = params.toString();
+  return qs ? `${basePath}?${qs}` : basePath;
 }
 
 export function InventoryDashboard({
@@ -121,10 +129,14 @@ export function InventoryDashboard({
   opnames: initialOpnames,
   summary: initialSummary,
   userRole,
+  lockBranch = false,
+  branchLabel,
+  defaultTab,
+  basePath = '/owner/inventory',
 }: InventoryDashboardProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const urlTab = searchParams.get('tab') as Tab | null;
+  const urlTab = (searchParams.get('tab') as Tab | null) ?? defaultTab;
   const urlStep = searchParams.get('step');
 
   const [tab, setTab] = useState<Tab>(
@@ -161,17 +173,37 @@ export function InventoryDashboard({
   const [activeOpname, setActiveOpname] = useState(initialSummary.unfinishedOpname);
 
   const isOwner = userRole === 'OWNER' || userRole === 'SUPER_ADMIN';
+  const isCashier = userRole === 'CASHIER';
+  const canManageMaster = isOwner || userRole === 'MANAGER';
   const isPendingApproval = activeOpname?.status === 'PENDING_APPROVAL';
+  const [detailOpname, setDetailOpname] = useState<OpnameDetailData | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const lowItems = useMemo(() => items.filter((i) => i.currentStock <= i.minStock), [items]);
 
   const syncUrl = useCallback(
     (nextTab: Tab, nextStep?: OpnameStep) => {
-      const href = buildInventoryUrl(branchId, nextTab, nextTab === 'opname' ? nextStep : undefined);
+      const href = buildInventoryUrl(basePath, branchId, nextTab, nextTab === 'opname' ? nextStep : undefined, lockBranch);
       router.replace(href, { scroll: false });
     },
-    [branchId, router]
+    [basePath, branchId, lockBranch, router]
   );
+
+  async function openOpnameDetail(opnameId: string) {
+    setDetailLoading(true);
+    try {
+      const detail = await getStockOpnameDetail(opnameId);
+      setDetailOpname({
+        ...detail,
+        period: new Date(detail.period).toISOString(),
+        createdAt: new Date(detail.createdAt).toISOString(),
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Gagal memuat detail');
+    } finally {
+      setDetailLoading(false);
+    }
+  }
 
   function refreshData(nextTab = tab, nextStep = opnameStep) {
     syncUrl(nextTab, nextStep);
@@ -364,7 +396,12 @@ export function InventoryDashboard({
 
   return (
     <div className="space-y-6">
-      {branches.length > 1 && (
+      {lockBranch && branchLabel ? (
+        <div className="rounded-xl border border-brand-navy/10 bg-white/70 px-4 py-3">
+          <p className="text-xs font-medium text-brand-navy/50">Cabang</p>
+          <p className="font-semibold text-brand-navy">{branchLabel}</p>
+        </div>
+      ) : branches.length > 1 ? (
         <Select
           id="branch"
           label="Cabang"
@@ -372,11 +409,11 @@ export function InventoryDashboard({
           onChange={(e) => {
             const nextBranch = e.target.value;
             setBranchId(nextBranch);
-            router.push(buildInventoryUrl(nextBranch, tab, tab === 'opname' ? opnameStep : undefined));
+            router.push(buildInventoryUrl(basePath, nextBranch, tab, tab === 'opname' ? opnameStep : undefined));
           }}
           options={branches.map((b) => ({ value: b.id, label: `${b.code} — ${b.name}` }))}
         />
-      )}
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard title="Total Item" value={String(summary.itemCount)} icon={Package} />
@@ -426,12 +463,12 @@ export function InventoryDashboard({
                 ? `${lowItems.length} item perlu restock`
                 : 'Semua stok dalam batas aman'}
             </p>
-            <Button size="sm" onClick={() => setShowForm(!showForm)}>
+            <Button size="sm" onClick={() => setShowForm(!showForm)} disabled={!canManageMaster}>
               <Plus className="h-4 w-4" /> Tambah Item
             </Button>
           </div>
 
-          {showForm && (
+          {showForm && canManageMaster && (
             <Card>
               <CardContent className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
                 <Input label="Nama" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -638,7 +675,9 @@ export function InventoryDashboard({
                       <Button onClick={approveOpname} disabled={pending}>Approve & Sesuaikan Stok</Button>
                     )}
                     {!isPendingApproval && !isOwner && (
-                      <Button onClick={submitForApproval} disabled={pending}>Ajukan Persetujuan Owner</Button>
+                      <Button onClick={submitForApproval} disabled={pending}>
+                        {isCashier ? 'Submit ke Owner' : 'Ajukan Persetujuan Owner'}
+                      </Button>
                     )}
                     {isPendingApproval && isOwner && (
                       <p className="text-xs text-brand-navy/50">
@@ -658,7 +697,11 @@ export function InventoryDashboard({
           {opnames.filter((o) => o.status === 'APPROVED').map((o) => {
             const totalVariance = o.lines.reduce((s, l) => s + Math.abs(l.varianceCost ?? 0), 0);
             return (
-              <Card key={o.id}>
+              <Card
+                key={o.id}
+                className="cursor-pointer transition-shadow hover:shadow-aww-md"
+                onClick={() => openOpnameDetail(o.id)}
+              >
                 <CardContent className="flex justify-between p-4">
                   <div>
                     <p className="font-semibold">{new Date(o.period).toLocaleDateString('id-ID')}</p>
@@ -666,6 +709,7 @@ export function InventoryDashboard({
                     {o.cashVariance != null && (
                       <p className="text-sm text-brand-navy/60">Selisih kas: {formatCurrency(o.cashVariance)}</p>
                     )}
+                    <p className="mt-1 text-xs text-rainbow-cyan">Klik untuk lihat detail</p>
                   </div>
                   <span className="rounded-full bg-rainbow-green/15 px-3 py-1 text-xs font-semibold text-rainbow-green">
                     {o.status}
@@ -677,6 +721,16 @@ export function InventoryDashboard({
           {opnames.filter((o) => o.status === 'APPROVED').length === 0 && (
             <p className="text-center text-brand-navy/50">Belum ada opname yang disetujui</p>
           )}
+        </div>
+      )}
+      <OpnameDetailModal
+        opname={detailOpname}
+        onClose={() => setDetailOpname(null)}
+        canApprove={isOwner && detailOpname?.status === 'PENDING_APPROVAL'}
+      />
+      {detailLoading && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-navy/20 text-sm text-brand-navy">
+          Memuat detail...
         </div>
       )}
     </div>
