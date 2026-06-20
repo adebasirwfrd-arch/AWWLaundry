@@ -33,7 +33,7 @@ export default async function CashierInventoryPage({
       <div className="mb-6">
         <h1 className="font-display text-3xl font-bold text-brand-navy">Stok & Opname</h1>
         <p className="text-brand-navy/60">
-          Inventori cabang — {branchLabel}. Selesaikan opname lalu ajukan ke owner.
+          Inventori cabang — {branchLabel}. Master stok, pergerakan, opname, dan rekonsiliasi kas.
         </p>
       </div>
 
