@@ -3,44 +3,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { Bell, CheckCheck, PackageCheck, MessageCircle, Star } from 'lucide-react';
+import { Bell, CheckCheck, PackageCheck, MessageCircle, Star, Wrench, ClipboardCheck } from 'lucide-react';
+import { Role } from '@aww/shared';
 import { markNotificationsRead } from '@/app/actions/notifications';
 import { useNotifications } from '@/hooks/use-notifications';
 import { queryKeys } from '@/lib/query-keys';
+import { getNotificationIconKind, getNotificationLink } from '@/lib/notification-links';
 import { toast } from '@/lib/toast';
-
-function linkFor(type: string, data: string): string {
-  try {
-    const parsed = JSON.parse(data) as { orderId?: string; opnameId?: string; resumeUrl?: string; branchId?: string; step?: string };
-    if (parsed.resumeUrl && type === 'STOCK_OPNAME_DRAFT') {
-      return parsed.resumeUrl;
-    }
-    if (parsed.opnameId && parsed.branchId && parsed.step && type === 'STOCK_OPNAME_DRAFT') {
-      return `/cashier/inventory?tab=opname&step=${parsed.step}`;
-    }
-    if (parsed.opnameId && type === 'STOCK_OPNAME_PENDING') {
-      return `/cashier/inbox?opname=${parsed.opnameId}#opname`;
-    }
-    if (parsed.orderId && type === 'ORDER_RECEIVED') {
-      return `/orders/${parsed.orderId}`;
-    }
-  } catch {
-    /* ignore */
-  }
-  if (type === 'MACHINE_TROUBLE') return '/cashier/inbox#mesin';
-  if (type === 'MACHINE_TROUBLE_REPLY') return '/cashier/inbox#laporan-mesin';
-  if (type === 'ORDER_REVIEW') return '/cashier/inbox#ulasan';
-  if (type === 'ORDER_CONFIRMATION') return '/cashier/inbox';
-  if (type === 'STOCK_OPNAME_DRAFT') return '/cashier/inbox#opname-draft';
-  if (type === 'STOCK_OPNAME_PENDING') return '/cashier/inbox#opname';
-  if (type === 'STOCK_OPNAME_REVISION') return '/cashier/inventory?tab=opname';
-  if (type === 'STOCK_OPNAME_APPROVED' || type === 'STOCK_OPNAME_REJECTED') {
-    return '/owner/inventory?tab=history';
-  }
-  if (type === 'CHAT_CUSTOMER') return '/messages';
-  if (type === 'CHAT_STAFF') return '/discussion';
-  return '#';
-}
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -52,7 +21,24 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)} hari lalu`;
 }
 
-export function NotificationBell() {
+function iconForType(type: string) {
+  switch (getNotificationIconKind(type)) {
+    case 'review':
+      return Star;
+    case 'order':
+      return PackageCheck;
+    case 'message':
+      return MessageCircle;
+    case 'machine':
+      return Wrench;
+    case 'opname':
+      return ClipboardCheck;
+    default:
+      return Bell;
+  }
+}
+
+export function NotificationBell({ role }: { role: Role }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -83,18 +69,30 @@ export function NotificationBell() {
     );
   }
 
-  function openItem(n: (typeof items)[0]) {
+  async function openItem(n: (typeof items)[0]) {
     setOpen(false);
-    router.push(linkFor(n.type, n.data));
+    const href = getNotificationLink(n.type, n.data, role);
+    if (!href) {
+      toast.error('Tujuan notifikasi tidak tersedia');
+      return;
+    }
+
+    if (!n.read) {
+      await markNotificationsRead([n.id]);
+      queryClient.setQueryData(queryKeys.notifications, (old: typeof data) => {
+        if (!old) return old;
+        const items = old.items.map((item) => (item.id === n.id ? { ...item, read: true } : item));
+        return { ...old, items, unreadCount: Math.max(0, old.unreadCount - 1) };
+      });
+    }
+
+    router.push(href);
   }
 
   return (
     <div className="relative" ref={ref}>
       <button
-        onClick={() => {
-          setOpen((o) => !o);
-          if (!open && unread > 0) markAll();
-        }}
+        onClick={() => setOpen((o) => !o)}
         className="relative flex h-11 w-11 items-center justify-center rounded-full bg-white/70 text-brand-navy shadow-aww-sm backdrop-blur-sm transition-colors hover:bg-white"
         aria-label="Notifikasi"
       >
@@ -110,21 +108,18 @@ export function NotificationBell() {
         <div className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-2xl border border-brand-navy/10 bg-white shadow-aww-lg">
           <div className="flex items-center justify-between border-b border-brand-navy/10 px-4 py-3">
             <p className="font-display text-sm font-bold text-brand-navy">Notifikasi</p>
-            <button onClick={markAll} className="flex items-center gap-1 text-xs text-rainbow-cyan hover:text-rainbow-blue">
-              <CheckCheck className="h-3.5 w-3.5" /> Tandai dibaca
-            </button>
+            {unread > 0 && (
+              <button onClick={markAll} className="flex items-center gap-1 text-xs text-rainbow-cyan hover:text-rainbow-blue">
+                <CheckCheck className="h-3.5 w-3.5" /> Tandai dibaca
+              </button>
+            )}
           </div>
           <div className="max-h-96 overflow-y-auto">
             {items.length === 0 ? (
               <p className="px-4 py-8 text-center text-sm text-brand-navy/40">Belum ada notifikasi</p>
             ) : (
               items.map((n) => {
-                const Icon =
-                  n.type === 'ORDER_REVIEW'
-                    ? Star
-                    : n.type === 'ORDER_RECEIVED' || n.type === 'ORDER_CONFIRMATION'
-                      ? PackageCheck
-                      : MessageCircle;
+                const Icon = iconForType(n.type);
                 return (
                   <button
                     key={n.id}

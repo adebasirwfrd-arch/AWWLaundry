@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { prisma, Role } from '@aww/database';
 import { requireAuth } from '@/lib/session';
 import { DashboardShell } from '@/components/layout/dashboard-shell';
@@ -27,14 +28,16 @@ export default async function MessagesPage() {
           <p className="text-brand-navy/60">Balas chat dari pelanggan aplikasi</p>
         </div>
       </div>
-      <MessagesClient
-        conversations={conversations.map((c) => ({
-          id: c.id,
-          customerName: c.customer?.name ?? c.title ?? 'Pelanggan',
-          lastPreview: c.messages[0]?.body || (c.messages[0]?.attachmentUrl ? '📎 Lampiran' : ''),
-          lastMessageAt: c.lastMessageAt.toISOString(),
-        }))}
-      />
+      <Suspense fallback={<div className="h-64 animate-pulse rounded-3xl bg-brand-navy/5" />}>
+        <MessagesClient
+          conversations={conversations.map((c) => ({
+            id: c.id,
+            customerName: c.customer?.name ?? c.title ?? 'Pelanggan',
+            lastPreview: c.messages[0]?.body || (c.messages[0]?.attachmentUrl ? '📎 Lampiran' : ''),
+            lastMessageAt: c.lastMessageAt.toISOString(),
+          }))}
+        />
+      </Suspense>
     </DashboardShell>
   );
 }

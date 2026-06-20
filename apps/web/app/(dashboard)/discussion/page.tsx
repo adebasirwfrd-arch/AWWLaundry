@@ -5,10 +5,23 @@ import { getOrCreateStaffDiscussion, listDiscussionBranches } from '@/app/action
 import { DiscussionPageClient } from '@/components/discussion/discussion-page-client';
 import { MessagesSquare } from 'lucide-react';
 import type { DiscussionAudienceScope } from '@/lib/discussion';
+import { getAccessibleConversation } from '@/lib/chat';
 
-export default async function DiscussionPage() {
+export default async function DiscussionPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ conversation?: string }>;
+}) {
   const session = await requireAuth([Role.OWNER, Role.SUPER_ADMIN, Role.MANAGER, Role.CASHIER, Role.WORKER]);
-  const isOwnerLike = session.user.role === Role.OWNER || session.user.role === Role.SUPER_ADMIN;
+  const params = await searchParams;
+  const isOwnerLike =
+    session.user.role === Role.OWNER || session.user.role === Role.SUPER_ADMIN;
+  const accessUser = {
+    id: session.user.id,
+    role: String(session.user.role),
+    organizationId: session.user.organizationId,
+    branchId: session.user.branchId,
+  };
 
   const branches = isOwnerLike
     ? await listDiscussionBranches()
@@ -25,10 +38,30 @@ export default async function DiscussionPage() {
     : session.user.branchId;
   const defaultScope: DiscussionAudienceScope = 'ALL';
 
-  const conversationId = await getOrCreateStaffDiscussion({
+  let conversationId = await getOrCreateStaffDiscussion({
     branchId: defaultBranchId,
     audienceScope: defaultScope,
   });
+  let branchId = defaultBranchId;
+  let scope: DiscussionAudienceScope = defaultScope;
+
+  if (params.conversation) {
+    const accessible = await getAccessibleConversation(accessUser, params.conversation);
+    if (accessible && accessible.type === 'STAFF_DISCUSSION') {
+      conversationId = accessible.id;
+      branchId = accessible.branchId ?? defaultBranchId;
+      scope = (accessible.audienceScope as DiscussionAudienceScope) ?? 'ALL';
+    }
+  } else {
+    const accessible = await getAccessibleConversation(accessUser, conversationId);
+    if (!accessible) {
+      conversationId = await getOrCreateStaffDiscussion({
+        branchId: session.user.branchId,
+        audienceScope: defaultScope,
+      });
+      branchId = session.user.branchId;
+    }
+  }
 
   return (
     <DashboardShell user={session.user}>
@@ -47,8 +80,8 @@ export default async function DiscussionPage() {
       </div>
       <DiscussionPageClient
         initialConversationId={conversationId}
-        initialBranchId={defaultBranchId}
-        initialScope={defaultScope}
+        initialBranchId={branchId}
+        initialScope={scope}
         branches={branches}
         showFilters={isOwnerLike}
         branchLabel={session.user.branchName}

@@ -17,7 +17,7 @@ export function buildOpnameResumeUrl(
   step: OpnameResumeStep
 ): string {
   const params = new URLSearchParams({ tab: 'opname', step });
-  if (role === 'OWNER' || role === 'SUPER_ADMIN') {
+  if (role === 'OWNER' || role === 'SUPER_ADMIN' || role === 'MANAGER') {
     params.set('branch', branchId);
     return `/owner/inventory?${params.toString()}`;
   }

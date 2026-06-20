@@ -245,12 +245,12 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
             <Image src="/brand/logo.png" alt="AWW Laundry" width={32} height={32} className="h-8 w-8 object-contain" />
             <span className="font-display text-sm font-bold text-brand-navy">AWW Laundry</span>
           </Link>
-          <NotificationBell />
+          <NotificationBell role={user.role} />
         </header>
 
         <main className="flex-1">
           <div className="hidden items-center justify-end gap-3 px-6 pt-6 lg:flex xl:px-8">
-            <NotificationBell />
+            <NotificationBell role={user.role} />
           </div>
           <div className="px-4 pb-24 pt-4 sm:px-6 lg:px-8 lg:pb-8 lg:pt-4">
             <PageTransition>{children}</PageTransition>

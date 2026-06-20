@@ -1,6 +1,6 @@
 'use server';
 
-import { prisma } from '@aww/database';
+import { prisma, Role } from '@aww/database';
 import { requireAuth } from '@/lib/session';
 import { createAuditLog, getBranchPrice, updateDailySummary } from '@/lib/audit';
 import { notifyMachineTroubleReported } from '@/lib/machine-notifications';
@@ -163,10 +163,15 @@ export async function createOrder(data: {
 
 export async function updateOrderStatus(orderId: string, newStatus: string, note?: string) {
   const session = await requireAuth();
-  const { branchId, id: userId, organizationId } = session.user;
+  const { id: userId, organizationId, role } = session.user;
+  const isOwnerLike = role === Role.OWNER || role === Role.SUPER_ADMIN;
 
   const order = await prisma.order.findFirst({
-    where: { id: orderId, branchId },
+    where: {
+      id: orderId,
+      branch: { organizationId },
+      ...(isOwnerLike ? {} : { branchId: session.user.branchId }),
+    },
   });
   if (!order) throw new Error('Order tidak ditemukan');
 
@@ -203,7 +208,7 @@ export async function updateOrderStatus(orderId: string, newStatus: string, note
   });
 
   await createAuditLog(
-    { organizationId, branchId, userId },
+    { organizationId, branchId: order.branchId, userId },
     'ORDER_STATUS_CHANGED',
     'Order',
     orderId,
@@ -211,7 +216,7 @@ export async function updateOrderStatus(orderId: string, newStatus: string, note
     { status: newStatus }
   );
 
-  await updateDailySummary(branchId);
+  await updateDailySummary(order.branchId);
 
   if (updated.customer.phone) {
     void notifyCustomerOrderStatus({
@@ -288,12 +293,17 @@ export async function receivePayment(orderId: string, method: string, amount: nu
 
 export async function reportMachineTrouble(machineId: string, note: string) {
   const session = await requireAuth();
-  const { branchId, id: userId, organizationId } = session.user;
+  const { id: userId, organizationId, role } = session.user;
+  const isOwnerLike = role === Role.OWNER || role === Role.SUPER_ADMIN;
   const trimmed = note.trim();
   if (!trimmed) throw new Error('Deskripsi masalah wajib diisi');
 
   const machine = await prisma.machine.findFirst({
-    where: { id: machineId, branchId },
+    where: {
+      id: machineId,
+      branch: { organizationId },
+      ...(isOwnerLike ? {} : { branchId: session.user.branchId }),
+    },
     include: { branch: { select: { name: true } } },
   });
   if (!machine) throw new Error('Mesin tidak ditemukan');
@@ -313,7 +323,7 @@ export async function reportMachineTrouble(machineId: string, note: string) {
   });
 
   await createAuditLog(
-    { organizationId, branchId, userId },
+    { organizationId, branchId: machine.branchId, userId },
     'MACHINE_TROUBLE_REPORTED',
     'Machine',
     machineId,
@@ -326,7 +336,7 @@ export async function reportMachineTrouble(machineId: string, note: string) {
     machineId,
     machineName: machine.name,
     machineType: machine.type,
-    branchId,
+    branchId: machine.branchId,
     branchName: machine.branch.name,
     note: trimmed,
     reportedByName: session.user.name ?? 'Staff',

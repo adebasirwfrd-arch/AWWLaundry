@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { ChevronRight, AlertTriangle, X } from 'lucide-react';
+import { ChevronRight, AlertTriangle, X, Filter, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { updateOrderStatus, reportMachineTrouble } from '@/app/actions/orders';
+import { getProductionBoardData } from '@/app/actions/production-board';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_FLOW, formatCurrency, formatWeight } from '@aww/shared';
 import { semantic } from '@aww/design-tokens';
 import { toast } from '@/lib/toast';
@@ -29,6 +30,10 @@ interface Machine {
 interface WorkerBoardProps {
   orders: Order[];
   machines: Machine[];
+  branches: Array<{ id: string; name: string; code?: string }>;
+  showBranchFilter: boolean;
+  branchId: string;
+  branchLabel: string;
 }
 
 const NEXT_STATUS: Record<string, string> = {
@@ -40,13 +45,42 @@ const NEXT_STATUS: Record<string, string> = {
   READY: 'PICKED_UP',
 };
 
-export function WorkerBoard({ orders: initialOrders, machines: initialMachines }: WorkerBoardProps) {
+export function WorkerBoard({
+  orders: initialOrders,
+  machines: initialMachines,
+  branches,
+  showBranchFilter,
+  branchId: initialBranchId,
+  branchLabel: initialBranchLabel,
+}: WorkerBoardProps) {
   const [orders, setOrders] = useState(initialOrders);
   const [machines, setMachines] = useState(initialMachines);
+  const [branchId, setBranchId] = useState(initialBranchId);
+  const [branchLabel, setBranchLabel] = useState(initialBranchLabel);
   const [isPending, startTransition] = useTransition();
+  const [loadingBranch, setLoadingBranch] = useState(false);
   const [reportMachine, setReportMachine] = useState<Machine | null>(null);
   const [reportNote, setReportNote] = useState('');
   const [reporting, setReporting] = useState(false);
+
+  function changeBranch(nextBranchId: string) {
+    if (nextBranchId === branchId) return;
+    setLoadingBranch(true);
+    startTransition(async () => {
+      try {
+        const data = await getProductionBoardData(nextBranchId);
+        setOrders(data.orders);
+        setMachines(data.machines);
+        setBranchId(nextBranchId);
+        setBranchLabel(data.branch.name);
+        setReportMachine(null);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Gagal memuat data cabang');
+      } finally {
+        setLoadingBranch(false);
+      }
+    });
+  }
 
   function handleStatusUpdate(orderId: string, currentStatus: string) {
     const next = NEXT_STATUS[currentStatus];
@@ -92,6 +126,35 @@ export function WorkerBoard({ orders: initialOrders, machines: initialMachines }
 
   return (
     <div className="space-y-6">
+      {showBranchFilter ? (
+        <div className="rounded-2xl border border-brand-navy/10 bg-white p-4 shadow-aww-sm">
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-brand-navy">
+            <Filter className="h-4 w-4 text-rainbow-cyan" />
+            Filter Cabang
+            {(loadingBranch || isPending) && <Loader2 className="h-4 w-4 animate-spin text-rainbow-cyan" />}
+          </div>
+          <select
+            value={branchId}
+            onChange={(e) => changeBranch(e.target.value)}
+            disabled={loadingBranch || isPending}
+            className="h-10 w-full max-w-sm rounded-xl border border-brand-navy/15 px-3 text-sm sm:w-auto sm:min-w-[240px]"
+          >
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+          <p className="mt-3 text-xs text-brand-navy/50">
+            Menampilkan board produksi cabang <strong>{branchLabel}</strong>
+          </p>
+        </div>
+      ) : (
+        <p className="text-sm text-brand-navy/55">
+          Cabang <strong>{branchLabel}</strong>
+        </p>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {machines.map((m) => (
           <Card

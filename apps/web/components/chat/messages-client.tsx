@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { MessageSquare, ChevronLeft } from 'lucide-react';
 import { ChatThread } from '@/components/chat/chat-thread';
 import { cn } from '@/lib/utils';
@@ -13,8 +14,16 @@ interface ConvoSummary {
 }
 
 export function MessagesClient({ conversations }: { conversations: ConvoSummary[] }) {
+  const searchParams = useSearchParams();
   const [activeId, setActiveId] = useState<string | null>(conversations[0]?.id ?? null);
   const active = conversations.find((c) => c.id === activeId);
+
+  useEffect(() => {
+    const conversationId = searchParams.get('conversation');
+    if (conversationId && conversations.some((c) => c.id === conversationId)) {
+      setActiveId(conversationId);
+    }
+  }, [searchParams, conversations]);
 
   if (conversations.length === 0) {
     return (

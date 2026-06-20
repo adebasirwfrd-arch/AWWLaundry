@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@aww/database';
 import { auth } from '@/lib/auth';
 import { getAccessibleConversation } from '@/lib/chat';
+import { resolveApiAccessUser } from '@/lib/api-access-user';
 
 export async function GET(
   _req: Request,
@@ -13,15 +14,14 @@ export async function GET(
   }
   const { id } = await params;
 
-  const convo = await getAccessibleConversation(
-    {
-      id: session.user.id,
-      role: session.user.role as string,
-      organizationId: session.user.organizationId,
-      branchId: session.user.branchId,
-    },
-    id
+  const accessUser = await resolveApiAccessUser(
+    session as typeof session & { user: NonNullable<typeof session.user> & { id: string } }
   );
+  if (!accessUser) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const convo = await getAccessibleConversation(accessUser, id);
   if (!convo) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -33,7 +33,7 @@ export async function GET(
   });
 
   return NextResponse.json({
-    currentUserId: session.user.id,
+    currentUserId: accessUser.id,
     messages: messages.map((m) => ({
       id: m.id,
       senderId: m.senderId,

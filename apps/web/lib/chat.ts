@@ -4,6 +4,7 @@ import {
   type DiscussionAudienceScope,
   isRoleInDiscussionScope,
 } from '@/lib/discussion';
+import { isDiscussionModeratorRole, isOwnerLikeRole } from '@/lib/api-access-user';
 
 const STAFF_ROLES = ['OWNER', 'SUPER_ADMIN', 'MANAGER', 'CASHIER', 'WORKER'];
 const SUPPORT_STAFF_ROLES = ['OWNER', 'SUPER_ADMIN', 'MANAGER', 'CASHIER'];
@@ -13,6 +14,63 @@ export interface AccessUser {
   role: string;
   organizationId: string;
   branchId?: string;
+}
+
+function normalizeRole(role: string): string {
+  return String(role ?? '').toUpperCase();
+}
+
+async function userHasBranchAssignment(userId: string, branchId: string): Promise<boolean> {
+  const row = await prisma.userBranchRole.findFirst({
+    where: { userId, branchId },
+    select: { id: true },
+  });
+  return !!row;
+}
+
+async function userHasOwnerAssignment(userId: string, organizationId: string): Promise<boolean> {
+  const row = await prisma.userBranchRole.findFirst({
+    where: {
+      userId,
+      role: { in: [Role.OWNER, Role.SUPER_ADMIN] },
+      branch: { organizationId },
+    },
+    select: { id: true },
+  });
+  return !!row;
+}
+
+async function userCanAccessBranch(user: AccessUser, branchId: string | null): Promise<boolean> {
+  if (!branchId) return true;
+  if (user.branchId && user.branchId === branchId) return true;
+  return userHasBranchAssignment(user.id, branchId);
+}
+
+async function canAccessStaffDiscussion(
+  user: AccessUser,
+  convo: {
+    organizationId: string;
+    branchId: string | null;
+    audienceScope: string | null;
+  }
+): Promise<boolean> {
+  const role = normalizeRole(user.role);
+  if (!STAFF_ROLES.includes(role)) return false;
+
+  // Owner/super admin (session atau assignment DB) — semua cabang & scope.
+  if (isOwnerLikeRole(role) || (await userHasOwnerAssignment(user.id, convo.organizationId))) {
+    return true;
+  }
+
+  // Manager — semua scope di cabang yang ia kelola.
+  if (isDiscussionModeratorRole(role)) {
+    return userCanAccessBranch(user, convo.branchId);
+  }
+
+  const scope = (convo.audienceScope ?? 'ALL') as DiscussionAudienceScope;
+  if (!isRoleInDiscussionScope(role as Role, scope)) return false;
+
+  return userCanAccessBranch(user, convo.branchId);
 }
 
 /**
@@ -27,23 +85,16 @@ export async function getAccessibleConversation(user: AccessUser, conversationId
   if (convo.organizationId !== user.organizationId) return null;
 
   if (convo.type === 'STAFF_DISCUSSION') {
-    if (!STAFF_ROLES.includes(user.role)) return null;
-
-    const scope = (convo.audienceScope ?? 'ALL') as DiscussionAudienceScope;
-    if (!isRoleInDiscussionScope(user.role as Role, scope)) return null;
-
-    const isOwnerLike = user.role === 'OWNER' || user.role === 'SUPER_ADMIN';
-    if (!isOwnerLike && convo.branchId && user.branchId && convo.branchId !== user.branchId) {
-      return null;
-    }
-    return convo;
+    const allowed = await canAccessStaffDiscussion(user, convo);
+    return allowed ? convo : null;
   }
 
   // CUSTOMER_SUPPORT
-  if (user.role === 'CUSTOMER') {
+  const role = normalizeRole(user.role);
+  if (role === 'CUSTOMER') {
     return convo.customer?.userId === user.id ? convo : null;
   }
-  return SUPPORT_STAFF_ROLES.includes(user.role) ? convo : null;
+  return SUPPORT_STAFF_ROLES.includes(role) ? convo : null;
 }
 
-export { STAFF_ROLES, SUPPORT_STAFF_ROLES };
+export { STAFF_ROLES, SUPPORT_STAFF_ROLES, canAccessStaffDiscussion };
