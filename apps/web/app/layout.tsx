@@ -4,7 +4,6 @@ import '@aww/design-tokens/css-variables.css';
 import './globals.css';
 import '../styles/native-responsive.css';
 import { Providers } from './providers';
-import { SplashScreen } from '@/components/animations/splash-screen';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -43,7 +42,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="min-h-dvh font-sans antialiased">
-        <SplashScreen />
         <Providers>{children}</Providers>
       </body>
     </html>

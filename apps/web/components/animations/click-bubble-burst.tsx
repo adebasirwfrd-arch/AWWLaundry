@@ -2,7 +2,6 @@
 
 import { useEffect } from 'react';
 import gsap from 'gsap';
-import { isMobileAppWebView } from '@/lib/mobile-webview';
 
 const RAINBOW = ['#FF5C9A', '#FF8C2A', '#FFD23F', '#6BCB77', '#4ECDC4', '#4A90D9', '#9B59B6'];
 
@@ -12,7 +11,6 @@ const RAINBOW = ['#FF5C9A', '#FF8C2A', '#FFD23F', '#6BCB77', '#4ECDC4', '#4A90D9
  */
 export function ClickBubbleBurst() {
   useEffect(() => {
-    if (isMobileAppWebView()) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
     let layer = document.getElementById('aww-burst-layer');

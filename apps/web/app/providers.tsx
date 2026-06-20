@@ -12,10 +12,14 @@ import { Toaster } from '@/components/ui/toaster';
 import { useNativeLiteUI } from '@/hooks/use-native-lite-ui';
 import { createAppQueryClient } from '@/lib/query-client';
 
-function NativeEffects() {
+function AppEffects() {
   const lite = useNativeLiteUI();
-  if (lite) return <NativeOverlayGuard />;
-  return <ClickBubbleBurst />;
+  return (
+    <>
+      {lite && <NativeOverlayGuard />}
+      <ClickBubbleBurst />
+    </>
+  );
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -27,7 +31,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <QueryClientProvider client={queryClient}>
           <NativeAppBootstrap />
           <NativeViewportSync />
-          <NativeEffects />
+          <AppEffects />
           <Toaster />
           {children}
         </QueryClientProvider>

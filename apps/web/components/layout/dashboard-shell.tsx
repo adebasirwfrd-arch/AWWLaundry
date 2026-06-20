@@ -25,11 +25,9 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Role, ROLE_LABELS } from '@aww/shared';
-import { RainbowBubbleField } from '@/components/animations/rainbow-bubble-field';
 import { PageTransition } from '@/components/animations/page-transition';
 import { NotificationBell } from '@/components/layout/notification-bell';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
-import { useNativeLiteUI } from '@/hooks/use-native-lite-ui';
 
 interface NavItem {
   href: string;
@@ -140,7 +138,6 @@ interface DashboardShellProps {
 
 export function DashboardShell({ children, user }: DashboardShellProps) {
   const pathname = usePathname();
-  const lite = useNativeLiteUI();
   const [menuOpen, setMenuOpen] = useState(false);
   const visibleNav = NAV_ITEMS.filter((item) => item.roles.includes(user.role));
   const bottomNav = pickBottomNav(visibleNav, user.role);
@@ -185,7 +182,6 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
 
   return (
     <div data-dashboard-root className="relative flex h-dvh min-h-0 flex-col overflow-hidden bg-aww-brand-hero">
-      {!lite && <RainbowBubbleField density="low" className="opacity-60" />}
 
       {/* Desktop sidebar — tampil di landscape lebar via native-responsive.css */}
       <aside
