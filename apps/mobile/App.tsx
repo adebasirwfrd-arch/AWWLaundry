@@ -10,7 +10,8 @@ import { NATIVE_BOOTSTRAP_JS } from './lib/injected-native';
 
 const APP_URL = (Constants.expoConfig?.extra?.appUrl as string | undefined) ?? 'https://aww-laundry.vercel.app';
 const APP_ORIGIN = APP_URL.replace(/\/$/, '');
-const START_URL = `${APP_ORIGIN}/customer?native=1`;
+// Mulai dari root agar tiap peran diarahkan ke dashboard-nya sendiri (owner, kasir, pelanggan).
+const START_URL = `${APP_ORIGIN}/?native=1`;
 
 export default function App() {
   const webRef = useRef<WebView>(null);
