@@ -34,6 +34,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { getCashflowData, createExpenseWithProof, deleteExpense, getExpenseCategoryOptions } from '@/app/actions/cashflow';
+import { createProductionMachine } from '@/app/actions/production-board';
+import { resolveMachineTypeFromCategory } from '@/lib/machine-types';
 import { PaymentProofCapture } from '@/components/pos/payment-proof-capture';
 import { ExpenseDetailModal, type ExpenseRow } from '@/components/cashflow/expense-detail-modal';
 import { PERIOD_LABELS, type DashboardPeriod } from '@/lib/date-buckets';
@@ -105,6 +107,9 @@ export function CashflowPageClient({
     description: '',
     date: new Date().toISOString().slice(0, 10),
     dueDate: '',
+    addToProductionBoard: true,
+    machineSerialNumber: '',
+    machineCapacityKg: '',
   });
 
   useEffect(() => {
@@ -158,6 +163,9 @@ export function CashflowPageClient({
       description: '',
       date: new Date().toISOString().slice(0, 10),
       dueDate: '',
+      addToProductionBoard: true,
+      machineSerialNumber: '',
+      machineCapacityKg: '',
     }));
     setProofUrl(null);
     setProofPreview(null);
@@ -197,6 +205,15 @@ export function CashflowPageClient({
       return;
     }
 
+    const machineType =
+      expenseTab === 'CAPEX' ? resolveMachineTypeFromCategory(category) : null;
+    if (expenseTab === 'CAPEX' && form.addToProductionBoard && machineType) {
+      if (!form.machineSerialNumber.trim()) {
+        setFormError('Nomor seri mesin wajib diisi untuk menambah unit ke board produksi');
+        return;
+      }
+    }
+
     setFormError(null);
     setMessage(null);
     setSaving(true);
@@ -216,10 +233,24 @@ export function CashflowPageClient({
       if (proofUrl) fd.append('proofUrl', proofUrl);
 
       const result = await createExpenseWithProof(fd);
+
+      if (expenseTab === 'CAPEX' && form.addToProductionBoard && machineType) {
+        await createProductionMachine({
+          branchId: form.branchId,
+          serialNumber: form.machineSerialNumber.trim(),
+          type: machineType,
+          capacityKg: form.machineCapacityKg ? parseFloat(form.machineCapacityKg) : null,
+        });
+      }
+
       setShowForm(false);
       setProofUrl(null);
       setProofPreview(null);
-      setMessage('Pengeluaran tersimpan');
+      setMessage(
+        expenseTab === 'CAPEX' && form.addToProductionBoard && machineType
+          ? 'Pengeluaran tersimpan & unit mesin ditambahkan ke board produksi'
+          : 'Pengeluaran tersimpan'
+      );
       setSelectedExpense(result.expense as ExpenseRow);
       void reloadAsync();
     } catch (e) {
@@ -764,6 +795,9 @@ function ExpenseForm({
     description: string;
     date: string;
     dueDate: string;
+    addToProductionBoard: boolean;
+    machineSerialNumber: string;
+    machineCapacityKg: string;
   };
   setForm: React.Dispatch<React.SetStateAction<typeof form>>;
   categories: string[];
@@ -780,6 +814,9 @@ function ExpenseForm({
   const net = Math.max(0, (parseFloat(form.amount) || 0) - (parseFloat(form.discount) || 0));
   const proofRequired =
     form.paymentMethod === 'BANK_TRANSFER' || form.paymentMethod === 'QRIS';
+  const resolvedCategory = form.customCategory.trim() || form.category.trim() || form.title.trim();
+  const machineType = type === 'CAPEX' ? resolveMachineTypeFromCategory(resolvedCategory) : null;
+  const showMachineFields = type === 'CAPEX' && !!machineType && form.addToProductionBoard;
 
   return (
     <div className="rounded-2xl border border-rainbow-cyan/30 bg-brand-sky/5 p-5">
@@ -853,6 +890,45 @@ function ExpenseForm({
         <div className="sm:col-span-2 lg:col-span-3">
           <Input label="Catatan tambahan" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         </div>
+        {type === 'CAPEX' && machineType && (
+          <div className="sm:col-span-2 lg:col-span-3 rounded-xl border border-rainbow-green/25 bg-rainbow-green/5 p-4">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={form.addToProductionBoard}
+                onChange={(e) => setForm({ ...form, addToProductionBoard: e.target.checked })}
+                className="mt-1 h-4 w-4 rounded border-brand-navy/20"
+              />
+              <span>
+                <span className="block text-sm font-semibold text-brand-navy">
+                  Tambahkan unit ke Board Produksi
+                </span>
+                <span className="mt-0.5 block text-xs text-brand-navy/55">
+                  Kategori mesin terdeteksi ({machineType}). Unit akan muncul di board produksi cabang yang dipilih.
+                </span>
+              </span>
+            </label>
+            {showMachineFields && (
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <Input
+                  label="Nomor Seri Mesin (nama unit)"
+                  value={form.machineSerialNumber}
+                  onChange={(e) => setForm({ ...form, machineSerialNumber: e.target.value })}
+                  placeholder="Mis: SN-WASH-2026-0042"
+                />
+                <Input
+                  label="Kapasitas (kg, opsional)"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={form.machineCapacityKg}
+                  onChange={(e) => setForm({ ...form, machineCapacityKg: e.target.value })}
+                  placeholder="Mis: 15"
+                />
+              </div>
+            )}
+          </div>
+        )}
         <div className="sm:col-span-2 lg:col-span-3">
           <PaymentProofCapture
             required={proofRequired}

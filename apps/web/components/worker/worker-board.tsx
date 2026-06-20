@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { ChevronRight, AlertTriangle, X, Filter, Loader2, Wrench, RefreshCw } from 'lucide-react';
+import { ChevronRight, AlertTriangle, X, Filter, Loader2, Wrench, RefreshCw, Plus } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { updateOrderStatus, reportMachineTrouble } from '@/app/actions/orders';
 import { resolveMachineTrouble, type MachineResolutionType } from '@/app/actions/machine-trouble';
-import { getProductionBoardData } from '@/app/actions/production-board';
+import { createProductionMachine, getProductionBoardData } from '@/app/actions/production-board';
+import { MACHINE_TYPE_OPTIONS } from '@/lib/machine-types';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_FLOW, formatCurrency, formatWeight } from '@aww/shared';
 import { semantic } from '@aww/design-tokens';
 import { toast } from '@/lib/toast';
@@ -67,6 +69,13 @@ export function WorkerBoard({
   const [reportNote, setReportNote] = useState('');
   const [reporting, setReporting] = useState(false);
   const [resolving, setResolving] = useState(false);
+  const [showAddMachine, setShowAddMachine] = useState(false);
+  const [addingMachine, setAddingMachine] = useState(false);
+  const [addMachineForm, setAddMachineForm] = useState({
+    serialNumber: '',
+    type: 'WASHER',
+    capacityKg: '',
+  });
 
   function changeBranch(nextBranchId: string) {
     if (nextBranchId === branchId) return;
@@ -162,6 +171,34 @@ export function WorkerBoard({
     }
   }
 
+  async function submitAddMachine() {
+    const serial = addMachineForm.serialNumber.trim();
+    if (!serial) {
+      toast.error('Nomor seri mesin wajib diisi');
+      return;
+    }
+    setAddingMachine(true);
+    try {
+      const created = await createProductionMachine({
+        branchId,
+        serialNumber: serial,
+        type: addMachineForm.type,
+        capacityKg: addMachineForm.capacityKg ? parseFloat(addMachineForm.capacityKg) : null,
+      });
+      setMachines((prev) => [
+        ...prev,
+        { id: created.id, name: created.name, type: created.type, status: created.status },
+      ].sort((a, b) => a.name.localeCompare(b.name)));
+      setShowAddMachine(false);
+      setAddMachineForm({ serialNumber: '', type: 'WASHER', capacityKg: '' });
+      toast.success(`Unit ${serial} ditambahkan ke board produksi`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Gagal menambah mesin');
+    } finally {
+      setAddingMachine(false);
+    }
+  }
+
   const columns = ORDER_STATUS_FLOW.slice(0, 6);
 
   return (
@@ -194,6 +231,22 @@ export function WorkerBoard({
           Cabang <strong>{branchLabel}</strong>
         </p>
       )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-display text-lg font-bold text-brand-navy">Unit Mesin</h2>
+        {canResolveMachines && (
+          <Button
+            size="sm"
+            variant="rainbow"
+            onClick={() => {
+              setShowAddMachine(true);
+              setAddMachineForm({ serialNumber: '', type: 'WASHER', capacityKg: '' });
+            }}
+          >
+            <Plus className="h-4 w-4" /> Tambah Mesin
+          </Button>
+        )}
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {machines.map((m) => (
@@ -278,6 +331,68 @@ export function WorkerBoard({
           );
         })}
       </div>
+
+      {showAddMachine && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-navy/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-aww-lg">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-display text-lg font-bold text-brand-navy">Tambah Unit Mesin</h3>
+                <p className="text-sm text-brand-navy/60">
+                  Cabang <strong>{branchLabel}</strong> — nama unit mengikuti nomor seri
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddMachine(false)}
+                className="rounded-full p-1 text-brand-navy/45 hover:bg-brand-navy/5"
+                aria-label="Tutup"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <Input
+                label="Nomor Seri Mesin (nama unit)"
+                value={addMachineForm.serialNumber}
+                onChange={(e) => setAddMachineForm((f) => ({ ...f, serialNumber: e.target.value }))}
+                placeholder="Mis: SN-WASH-2026-0042"
+              />
+              <div>
+                <label className="mb-1 block text-sm font-medium text-brand-navy">Tipe Mesin</label>
+                <select
+                  value={addMachineForm.type}
+                  onChange={(e) => setAddMachineForm((f) => ({ ...f, type: e.target.value }))}
+                  className="h-11 w-full rounded-xl border border-brand-navy/15 px-3 text-sm"
+                >
+                  {MACHINE_TYPE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Input
+                label="Kapasitas (kg, opsional)"
+                type="number"
+                min="0"
+                step="0.1"
+                value={addMachineForm.capacityKg}
+                onChange={(e) => setAddMachineForm((f) => ({ ...f, capacityKg: e.target.value }))}
+                placeholder="Mis: 15"
+              />
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setShowAddMachine(false)} disabled={addingMachine}>
+                Batal
+              </Button>
+              <Button onClick={() => void submitAddMachine()} disabled={addingMachine}>
+                {addingMachine ? 'Menyimpan...' : 'Simpan Unit'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {resolveMachine && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-navy/40 p-4 backdrop-blur-sm">
