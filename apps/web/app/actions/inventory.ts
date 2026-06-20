@@ -648,17 +648,67 @@ export async function cancelStockOpname(opnameId: string, branchId?: string) {
   return { ok: true };
 }
 
+function expenseNetAmount(row: { amount: number; discount?: number | null; netAmount?: number | null }) {
+  if (row.netAmount != null && row.netAmount > 0) return row.netAmount;
+  return Math.max(0, row.amount - (row.discount ?? 0));
+}
+
+/** Kas seharusnya = saldo opname terakhir + pembayaran tunai - pengeluaran tunai sejak opname disetujui. */
+async function computeExpectedBranchCash(branchId: string) {
+  const lastApproved = await prisma.stockOpname.findFirst({
+    where: { branchId, status: 'APPROVED', cashActual: { not: null } },
+    orderBy: { approvedAt: 'desc' },
+    select: { cashActual: true, approvedAt: true },
+  });
+
+  const openingBalance = lastApproved?.cashActual ?? 0;
+  const since = lastApproved?.approvedAt ?? new Date(0);
+
+  const [cashPayments, cashExpenses] = await Promise.all([
+    prisma.payment.aggregate({
+      where: {
+        branchId,
+        method: 'CASH',
+        status: 'PAID',
+        paidAt: { gt: since },
+      },
+      _sum: { amount: true },
+    }),
+    prisma.expense.findMany({
+      where: {
+        branchId,
+        paymentMethod: 'CASH',
+        date: { gt: since },
+      },
+      select: { amount: true, discount: true, netAmount: true },
+    }),
+  ]);
+
+  const payments = cashPayments._sum.amount ?? 0;
+  const expenses = cashExpenses.reduce((sum, row) => sum + expenseNetAmount(row), 0);
+
+  return Math.round(openingBalance + payments - expenses);
+}
+
+export async function getExpectedBranchCash(branchId?: string) {
+  const { branchId: bid } = await inventoryCtx(branchId);
+  return computeExpectedBranchCash(bid);
+}
+
 export async function getInventorySummary(branchId?: string) {
   const { branchId: bid } = await inventoryCtx(branchId);
   const items = await prisma.inventoryItem.findMany({ where: { branchId: bid } });
 
   const lowStock = items.filter((i) => i.currentStock <= i.minStock);
   const totalValue = items.reduce((s, i) => s + i.currentStock * (i.unitCost ?? 0), 0);
-  const unfinishedOpname = await prisma.stockOpname.findFirst({
-    where: { branchId: bid, status: { in: ['DRAFT', 'COUNTING', 'PENDING_APPROVAL'] } },
-    orderBy: { createdAt: 'desc' },
-    include: { lines: { include: { item: { select: { name: true, unit: true, sku: true } } } } },
-  });
+  const [unfinishedOpname, expectedCash] = await Promise.all([
+    prisma.stockOpname.findFirst({
+      where: { branchId: bid, status: { in: ['DRAFT', 'COUNTING', 'PENDING_APPROVAL'] } },
+      orderBy: { createdAt: 'desc' },
+      include: { lines: { include: { item: { select: { name: true, unit: true, sku: true } } } } },
+    }),
+    computeExpectedBranchCash(bid),
+  ]);
 
   return {
     itemCount: items.length,
@@ -666,5 +716,6 @@ export async function getInventorySummary(branchId?: string) {
     totalValue,
     lowStock,
     unfinishedOpname,
+    expectedCash,
   };
 }

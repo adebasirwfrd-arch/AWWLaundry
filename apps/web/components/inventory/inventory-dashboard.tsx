@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition, useCallback } from 'react';
+import { useMemo, useState, useTransition, useCallback, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   AlertTriangle,
@@ -26,6 +26,7 @@ import {
   updateOpnameCash,
   updateOpnameLine,
   upsertInventoryItem,
+  getExpectedBranchCash,
 } from '@/app/actions/inventory';
 import { OpnameDetailModal, type OpnameDetailData } from '@/components/inventory/opname-detail-modal';
 import { toast } from '@/lib/toast';
@@ -84,6 +85,7 @@ interface InventoryDashboardProps {
     totalValue: number;
     lowStock: InventoryItem[];
     unfinishedOpname: StockOpname | null;
+    expectedCash: number;
   };
   userRole: string;
   lockBranch?: boolean;
@@ -164,8 +166,12 @@ export function InventoryDashboard({
   const [opnameStep, setOpnameStep] = useState<OpnameStep>(() =>
     inferOpnameStep(initialSummary.unfinishedOpname, urlStep)
   );
+  const defaultExpectedCash =
+    initialSummary.unfinishedOpname?.cashExpected != null
+      ? String(initialSummary.unfinishedOpname.cashExpected)
+      : String(initialSummary.expectedCash);
   const [cashForm, setCashForm] = useState({
-    expected: initialSummary.unfinishedOpname?.cashExpected != null ? String(initialSummary.unfinishedOpname.cashExpected) : '',
+    expected: defaultExpectedCash,
     actual: initialSummary.unfinishedOpname?.cashActual != null ? String(initialSummary.unfinishedOpname.cashActual) : '',
     notes: initialSummary.unfinishedOpname?.notes ?? '',
   });
@@ -180,6 +186,22 @@ export function InventoryDashboard({
   const [detailLoading, setDetailLoading] = useState(false);
 
   const lowItems = useMemo(() => items.filter((i) => i.currentStock <= i.minStock), [items]);
+
+  const fillExpectedCash = useCallback(async () => {
+    if (activeOpname?.cashExpected != null) return;
+    try {
+      const expected = await getExpectedBranchCash(branchId);
+      setCashForm((prev) => (prev.expected ? prev : { ...prev, expected: String(expected) }));
+    } catch {
+      // Biarkan kosong jika gagal fetch — user bisa isi manual
+    }
+  }, [activeOpname?.cashExpected, branchId]);
+
+  useEffect(() => {
+    if (opnameStep === 'cash' && activeOpname && activeOpname.cashExpected == null) {
+      void fillExpectedCash();
+    }
+  }, [opnameStep, activeOpname, fillExpectedCash]);
 
   const syncUrl = useCallback(
     (nextTab: Tab, nextStep?: OpnameStep) => {
@@ -306,6 +328,14 @@ export function InventoryDashboard({
         setActiveOpname({ ...activeOpname, lines: updatedLines });
         setOpnameStep('cash');
         syncUrl('opname', 'cash');
+        try {
+          const expected = await getExpectedBranchCash(branchId);
+          setCashForm((prev) => ({ ...prev, expected: String(expected) }));
+        } catch {
+          setCashForm((prev) =>
+            prev.expected ? prev : { ...prev, expected: String(initialSummary.expectedCash) }
+          );
+        }
         toast.success('Hitungan fisik disimpan');
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Gagal menyimpan');
@@ -618,7 +648,17 @@ export function InventoryDashboard({
                 <Card>
                   <CardHeader><CardTitle>Rekonsiliasi Kas Fisik</CardTitle></CardHeader>
                   <CardContent className="grid gap-3 sm:grid-cols-2">
-                    <Input label="Kas Seharusnya (Rp)" type="number" value={cashForm.expected} onChange={(e) => setCashForm({ ...cashForm, expected: e.target.value })} />
+                    <div className="space-y-1.5">
+                      <Input
+                        label="Kas Seharusnya (Rp)"
+                        type="number"
+                        value={cashForm.expected}
+                        onChange={(e) => setCashForm({ ...cashForm, expected: e.target.value })}
+                      />
+                      <p className="text-xs text-brand-navy/50">
+                        Otomatis dari sistem: saldo opname terakhir + pembayaran tunai − pengeluaran tunai.
+                      </p>
+                    </div>
                     <Input label="Kas Aktual (Rp)" type="number" value={cashForm.actual} onChange={(e) => setCashForm({ ...cashForm, actual: e.target.value })} />
                     <Input label="Catatan" className="sm:col-span-2" value={cashForm.notes} onChange={(e) => setCashForm({ ...cashForm, notes: e.target.value })} />
                     <div className="flex gap-2">
