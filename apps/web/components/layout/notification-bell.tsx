@@ -20,6 +20,8 @@ function linkFor(type: string, data: string): string {
   }
   if (type === 'ORDER_REVIEW') return '/cashier/inbox#ulasan';
   if (type === 'ORDER_CONFIRMATION') return '/cashier/inbox';
+  if (type === 'STOCK_OPNAME_PENDING') return '/cashier/inbox#opname';
+  if (type === 'STOCK_OPNAME_APPROVED' || type === 'STOCK_OPNAME_REJECTED') return '/owner/inventory?tab=history';
   if (type === 'CHAT_CUSTOMER') return '/messages';
   if (type === 'CHAT_STAFF') return '/discussion';
   return '#';

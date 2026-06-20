@@ -45,6 +45,7 @@ export default async function InventoryPage({
           movements={movements}
           opnames={opnames}
           summary={summary}
+          userRole={session.user.role}
         />
       </Suspense>
     </DashboardShell>

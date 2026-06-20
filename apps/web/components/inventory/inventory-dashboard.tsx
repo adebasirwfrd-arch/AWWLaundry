@@ -21,6 +21,7 @@ import {
   cancelStockOpname,
   createStockOpname,
   recordStockMovement,
+  submitStockOpnameForApproval,
   updateOpnameCash,
   updateOpnameLine,
   upsertInventoryItem,
@@ -81,7 +82,9 @@ interface InventoryDashboardProps {
     totalValue: number;
     lowStock: InventoryItem[];
     activeOpname: StockOpname | null;
+    pendingApproval: StockOpname | null;
   };
+  userRole: string;
 }
 
 type Tab = 'items' | 'movements' | 'opname' | 'history';
@@ -99,6 +102,7 @@ function parseQty(val: string): number {
 function inferOpnameStep(activeOpname: StockOpname | null, urlStep: string | null): OpnameStep {
   if (urlStep === 'count' || urlStep === 'cash' || urlStep === 'review') return urlStep;
   if (!activeOpname) return 'count';
+  if (activeOpname.status === 'PENDING_APPROVAL') return 'review';
   if (activeOpname.cashExpected != null && activeOpname.cashActual != null) return 'review';
   return 'count';
 }
@@ -117,6 +121,7 @@ export function InventoryDashboard({
   movements: initialMovements,
   opnames: initialOpnames,
   summary: initialSummary,
+  userRole,
 }: InventoryDashboardProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -154,7 +159,12 @@ export function InventoryDashboard({
     notes: initialSummary.activeOpname?.notes ?? '',
   });
   const [lineEdits, setLineEdits] = useState<Record<string, string>>({});
-  const [activeOpname, setActiveOpname] = useState(initialSummary.activeOpname);
+  const [activeOpname, setActiveOpname] = useState(
+    initialSummary.activeOpname ?? initialSummary.pendingApproval
+  );
+
+  const isOwner = userRole === 'OWNER' || userRole === 'SUPER_ADMIN';
+  const isPendingApproval = activeOpname?.status === 'PENDING_APPROVAL';
 
   const lowItems = useMemo(() => items.filter((i) => i.currentStock <= i.minStock), [items]);
 
@@ -284,6 +294,21 @@ export function InventoryDashboard({
     });
   }
 
+  function submitForApproval() {
+    if (!activeOpname) return;
+    startTransition(async () => {
+      try {
+        await submitStockOpnameForApproval(activeOpname.id, branchId);
+        toast.success('Opname diajukan — owner akan menerima email & notifikasi');
+        setActiveOpname(null);
+        setOpnameStep('count');
+        refreshData('opname');
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Gagal mengajukan');
+      }
+    });
+  }
+
   function approveOpname() {
     if (!activeOpname) return;
     startTransition(async () => {
@@ -348,9 +373,17 @@ export function InventoryDashboard({
         <SummaryCard title="Nilai Inventori" value={formatCurrency(summary.totalValue)} icon={TrendingDown} />
         <SummaryCard
           title="Opname Aktif"
-          value={activeOpname ? 'Berjalan' : 'Tidak ada'}
+          value={
+            isPendingApproval
+              ? 'Menunggu Owner'
+              : activeOpname
+                ? 'Berjalan'
+                : initialSummary.pendingApproval
+                  ? 'Menunggu Owner'
+                  : 'Tidak ada'
+          }
           icon={ClipboardCheck}
-          warn={!!activeOpname}
+          warn={!!activeOpname || !!initialSummary.pendingApproval}
         />
       </div>
 
@@ -542,8 +575,17 @@ export function InventoryDashboard({
 
               {opnameStep === 'review' && (
                 <Card>
-                  <CardHeader><CardTitle>Review & Approve Opname</CardTitle></CardHeader>
+                  <CardHeader>
+                    <CardTitle>
+                      {isPendingApproval ? 'Menunggu Persetujuan Owner' : 'Review & Approve Opname'}
+                    </CardTitle>
+                  </CardHeader>
                   <CardContent className="space-y-3">
+                    {isPendingApproval && !isOwner && (
+                      <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                        Opname sudah diajukan. Owner akan review di <strong>Kotak Masuk</strong> dan menerima email notifikasi.
+                      </div>
+                    )}
                     {activeOpname.lines.map((line) => {
                       const v = line.variance;
                       return (
@@ -564,7 +606,23 @@ export function InventoryDashboard({
                         <p>Selisih kas: {formatCurrency(activeOpname.cashVariance ?? 0)}</p>
                       </div>
                     )}
-                    <Button onClick={approveOpname} disabled={pending}>Approve & Sesuaikan Stok</Button>
+                    {isPendingApproval && isOwner && (
+                      <div className="flex gap-2 pt-2">
+                        <Button onClick={approveOpname} disabled={pending}>Approve & Sesuaikan Stok</Button>
+                        <Button variant="outline" onClick={cancelOpname} disabled={pending}>Tolak</Button>
+                      </div>
+                    )}
+                    {!isPendingApproval && isOwner && (
+                      <Button onClick={approveOpname} disabled={pending}>Approve & Sesuaikan Stok</Button>
+                    )}
+                    {!isPendingApproval && !isOwner && (
+                      <Button onClick={submitForApproval} disabled={pending}>Ajukan Persetujuan Owner</Button>
+                    )}
+                    {isPendingApproval && isOwner && (
+                      <p className="text-xs text-brand-navy/50">
+                        Atau approve dari <a href="/cashier/inbox#opname" className="text-rainbow-cyan hover:underline">Kotak Masuk</a>
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
               )}

@@ -122,6 +122,44 @@ export async function sendCapexDueReminderEmail(input: {
   });
 }
 
+export async function sendStockOpnamePendingEmail(input: {
+  to: string;
+  name: string;
+  branchName: string;
+  submittedBy: string;
+  periodLabel: string;
+  lineCount: number;
+  totalVarianceCost: number;
+  cashVariance: number | null;
+  inboxUrl: string;
+}) {
+  const varianceLabel = formatCurrency(input.totalVarianceCost);
+  const cashLabel =
+    input.cashVariance != null ? formatCurrency(input.cashVariance) : '—';
+
+  return sendEmail({
+    to: { email: input.to, name: input.name },
+    subject: `[AWW Laundry] Stock Opname menunggu persetujuan — ${input.branchName}`,
+    htmlContent: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#1E3A6E">
+        <h2 style="color:#1E3A6E">Stock Opname Perlu Review</h2>
+        <p>Halo ${input.name},</p>
+        <p><strong>${input.submittedBy}</strong> telah menyelesaikan stock opname dan mengajukan persetujuan Anda:</p>
+        <div style="background:#FFF7ED;border-radius:12px;padding:16px;margin:16px 0;border:1px solid #FF8C2A33">
+          <p style="margin:0 0 8px"><strong>${input.branchName}</strong></p>
+          <p style="margin:0 0 4px">Periode: ${input.periodLabel}</p>
+          <p style="margin:0 0 4px">Item dihitung: ${input.lineCount}</p>
+          <p style="margin:0 0 4px">Selisih nilai stok: <strong style="color:#FF8C2A">${varianceLabel}</strong></p>
+          <p style="margin:0">Selisih kas: <strong>${cashLabel}</strong></p>
+        </div>
+        <p>Silakan review dan approve di kotak masuk aplikasi.</p>
+        <p><a href="${input.inboxUrl}" style="background:#FF8C2A;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block">Buka Kotak Masuk</a></p>
+        <p style="color:#888;font-size:12px;margin-top:24px">AWW Laundry — FRESH • CLEAN • FUN</p>
+      </div>
+    `,
+  });
+}
+
 export async function sendCashflowReportEmail(input: {
   to: string;
   name: string;

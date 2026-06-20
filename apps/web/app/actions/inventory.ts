@@ -4,8 +4,17 @@ import { revalidatePath } from 'next/cache';
 import { prisma, Role, StockMovementType } from '@aww/database';
 import { requireAuth } from '@/lib/session';
 import { createAuditLog } from '@/lib/audit';
+import {
+  notifyOpnameApproved,
+  notifyOpnameRejected,
+  notifyOpnameSubmittedForApproval,
+} from '@/lib/opname-notifications';
 
 const INVENTORY_ROLES = [Role.OWNER, Role.MANAGER];
+
+function isApprover(role: Role) {
+  return role === Role.OWNER || role === Role.SUPER_ADMIN;
+}
 
 async function inventoryCtx(branchId?: string) {
   const session = await requireAuth(INVENTORY_ROLES);
@@ -179,7 +188,7 @@ export async function createStockOpname(branchId?: string) {
   const { session, branchId: bid, organizationId } = await inventoryCtx(branchId);
 
   const draft = await prisma.stockOpname.findFirst({
-    where: { branchId: bid, status: { in: ['DRAFT', 'COUNTING'] } },
+    where: { branchId: bid, status: { in: ['DRAFT', 'COUNTING', 'PENDING_APPROVAL'] } },
   });
   if (draft) throw new Error('Masih ada opname yang belum selesai');
 
@@ -287,17 +296,97 @@ export async function updateOpnameCash(input: {
   });
 }
 
-/** Step 4: Approve — sesuaikan stok & catat pergerakan. */
-export async function approveStockOpname(opnameId: string, branchId?: string) {
+/** Step 4a: Manager ajukan ke owner — kirim email & notifikasi inbox. */
+export async function submitStockOpnameForApproval(opnameId: string, branchId?: string) {
   const { session, branchId: bid, organizationId } = await inventoryCtx(branchId);
+
+  const opname = await prisma.stockOpname.findFirst({
+    where: { id: opnameId, branchId: bid },
+    include: {
+      lines: { include: { item: true } },
+      branch: { select: { name: true } },
+    },
+  });
+  if (!opname) throw new Error('Opname tidak ditemukan');
+  if (opname.status !== 'COUNTING') {
+    throw new Error('Opname tidak bisa diajukan — pastikan hitungan fisik & kas sudah lengkap');
+  }
+  if (opname.cashExpected == null || opname.cashActual == null) {
+    throw new Error('Rekonsiliasi kas wajib diisi sebelum diajukan');
+  }
+
+  const totalVarianceCost = opname.lines.reduce((s, l) => s + Math.abs(l.varianceCost ?? 0), 0);
+
+  await prisma.stockOpname.update({
+    where: { id: opnameId },
+    data: { status: 'PENDING_APPROVAL' },
+  });
+
+  await createAuditLog(
+    { organizationId, branchId: bid, userId: session.user.id },
+    'STOCK_OPNAME_CREATED',
+    'StockOpname',
+    opnameId,
+    { status: 'COUNTING' },
+    { status: 'PENDING_APPROVAL' }
+  );
+
+  void notifyOpnameSubmittedForApproval({
+    opnameId,
+    branchId: bid,
+    branchName: opname.branch.name,
+    submittedByName: session.user.name ?? 'Staff',
+    lineCount: opname.lines.length,
+    totalVarianceCost,
+    cashVariance: opname.cashVariance,
+    excludeUserId: session.user.role === Role.OWNER ? session.user.id : undefined,
+  }).catch(() => {});
+
+  revalidatePath('/owner/inventory');
+  revalidatePath('/cashier/inbox');
+  return { ok: true };
+}
+
+/** List opname menunggu approve — untuk kotak masuk owner. */
+export async function listPendingOpnameApprovals(branchId?: string) {
+  const session = await requireAuth([...INVENTORY_ROLES, Role.CASHIER, Role.SUPER_ADMIN]);
+  const bid = branchId ?? session.user.branchId;
+
+  return prisma.stockOpname.findMany({
+    where: { branchId: bid, status: 'PENDING_APPROVAL' },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      branch: { select: { name: true, code: true } },
+      lines: { include: { item: { select: { name: true, unit: true } } } },
+    },
+  });
+}
+
+/** Step 4b: Owner approve — sesuaikan stok & catat pergerakan. */
+export async function approveStockOpname(opnameId: string, branchId?: string) {
+  const session = await requireAuth([...INVENTORY_ROLES, Role.SUPER_ADMIN]);
+  const bid = branchId ?? session.user.branchId;
+  const organizationId = session.user.organizationId;
+
+  if (!isApprover(session.user.role as Role)) {
+    throw new Error('Hanya owner yang dapat menyetujui stock opname');
+  }
+
+  const branch = await prisma.branch.findFirst({
+    where: { id: bid, organizationId },
+  });
+  if (!branch) throw new Error('Cabang tidak ditemukan');
 
   const opname = await prisma.stockOpname.findFirst({
     where: { id: opnameId, branchId: bid },
     include: { lines: { include: { item: true } } },
   });
   if (!opname) throw new Error('Opname tidak ditemukan');
-  if (!['DRAFT', 'COUNTING'].includes(opname.status)) {
+  if (!['COUNTING', 'PENDING_APPROVAL'].includes(opname.status)) {
     throw new Error('Opname sudah disetujui atau dibatalkan');
+  }
+  if (opname.status === 'COUNTING' && session.user.role === Role.MANAGER) {
+    throw new Error('Manager harus ajukan persetujuan ke owner terlebih dahulu');
   }
 
   await prisma.$transaction(async (tx) => {
@@ -348,7 +437,47 @@ export async function approveStockOpname(opnameId: string, branchId?: string) {
     });
   });
 
+  void notifyOpnameApproved({
+    branchId: bid,
+    opnameId,
+    approvedByName: session.user.name ?? 'Owner',
+    createdById: opname.createdById,
+  }).catch(() => {});
+
   revalidatePath('/owner/inventory');
+  revalidatePath('/cashier/inbox');
+  return { ok: true };
+}
+
+/** Owner tolak opname yang diajukan. */
+export async function rejectStockOpname(opnameId: string, reason?: string, branchId?: string) {
+  const session = await requireAuth([...INVENTORY_ROLES, Role.SUPER_ADMIN]);
+  const bid = branchId ?? session.user.branchId;
+
+  if (!isApprover(session.user.role as Role)) {
+    throw new Error('Hanya owner yang dapat menolak stock opname');
+  }
+
+  const opname = await prisma.stockOpname.findFirst({
+    where: { id: opnameId, branchId: bid, status: 'PENDING_APPROVAL' },
+  });
+  if (!opname) throw new Error('Opname tidak ditemukan');
+
+  await prisma.stockOpname.update({
+    where: { id: opnameId },
+    data: { status: 'CANCELLED', notes: reason ? `Ditolak: ${reason}` : 'Ditolak owner' },
+  });
+
+  void notifyOpnameRejected({
+    branchId: bid,
+    opnameId,
+    rejectedByName: session.user.name ?? 'Owner',
+    reason,
+    createdById: opname.createdById,
+  }).catch(() => {});
+
+  revalidatePath('/owner/inventory');
+  revalidatePath('/cashier/inbox');
   return { ok: true };
 }
 
@@ -356,7 +485,7 @@ export async function cancelStockOpname(opnameId: string, branchId?: string) {
   const { branchId: bid } = await inventoryCtx(branchId);
 
   const opname = await prisma.stockOpname.findFirst({
-    where: { id: opnameId, branchId: bid, status: { in: ['DRAFT', 'COUNTING'] } },
+    where: { id: opnameId, branchId: bid, status: { in: ['DRAFT', 'COUNTING', 'PENDING_APPROVAL'] } },
   });
   if (!opname) throw new Error('Opname tidak ditemukan');
 
@@ -366,6 +495,7 @@ export async function cancelStockOpname(opnameId: string, branchId?: string) {
   });
 
   revalidatePath('/owner/inventory');
+  revalidatePath('/cashier/inbox');
   return { ok: true };
 }
 
@@ -379,6 +509,10 @@ export async function getInventorySummary(branchId?: string) {
     where: { branchId: bid, status: { in: ['DRAFT', 'COUNTING'] } },
     include: { lines: { include: { item: { select: { name: true, unit: true, sku: true } } } } },
   });
+  const pendingApproval = await prisma.stockOpname.findFirst({
+    where: { branchId: bid, status: 'PENDING_APPROVAL' },
+    include: { lines: { include: { item: { select: { name: true, unit: true, sku: true } } } } },
+  });
 
   return {
     itemCount: items.length,
@@ -386,5 +520,6 @@ export async function getInventorySummary(branchId?: string) {
     totalValue,
     lowStock,
     activeOpname,
+    pendingApproval,
   };
 }

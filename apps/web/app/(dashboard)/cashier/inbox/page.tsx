@@ -4,15 +4,18 @@ import { requireAuth } from '@/lib/session';
 import { DashboardShell } from '@/components/layout/dashboard-shell';
 import { PendingOrders } from '@/components/pos/pending-orders';
 import { InboxReviews } from '@/components/inbox/inbox-reviews';
-import { Inbox, MessageSquare, ArrowRight, Star } from 'lucide-react';
+import { InboxOpnameApprovals } from '@/components/inbox/inbox-opname-approvals';
+import { listPendingOpnameApprovals } from '@/app/actions/inventory';
+import { Inbox, MessageSquare, ArrowRight, Star, ClipboardCheck } from 'lucide-react';
 
 const INBOX_ROLES = [Role.CASHIER, Role.MANAGER, Role.OWNER, Role.SUPER_ADMIN, Role.WORKER];
 
 export default async function CashierInboxPage() {
   const session = await requireAuth(INBOX_ROLES);
   const isWorker = session.user.role === Role.WORKER;
+  const canApproveOpname = session.user.role === Role.OWNER || session.user.role === Role.SUPER_ADMIN;
 
-  const [pending, recentReviews, recentChats] = await Promise.all([
+  const [pending, recentReviews, recentChats, pendingOpnames] = await Promise.all([
     isWorker
       ? Promise.resolve([])
       : prisma.order.findMany({
@@ -49,6 +52,7 @@ export default async function CashierInboxPage() {
             messages: { orderBy: { createdAt: 'desc' }, take: 1 },
           },
         }),
+    listPendingOpnameApprovals(session.user.branchId),
   ]);
 
   return (
@@ -101,6 +105,41 @@ export default async function CashierInboxPage() {
         )}
 
         <div className={`space-y-6 ${isWorker ? 'max-w-2xl' : ''}`}>
+          <section id="opname">
+            <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-bold text-brand-navy">
+              <ClipboardCheck className="h-5 w-5 text-brand-orange" />
+              Stock Opname Menunggu Persetujuan
+              {pendingOpnames.length > 0 && (
+                <span className="rounded-full bg-brand-orange/20 px-2 py-0.5 text-xs font-semibold text-brand-orange">
+                  {pendingOpnames.length}
+                </span>
+              )}
+            </h2>
+            <InboxOpnameApprovals
+              canApprove={canApproveOpname}
+              opnames={pendingOpnames.map((o) => ({
+                id: o.id,
+                period: o.period.toISOString(),
+                cashExpected: o.cashExpected,
+                cashActual: o.cashActual,
+                cashVariance: o.cashVariance,
+                notes: o.notes,
+                createdAt: o.createdAt.toISOString(),
+                branchName: o.branch.name,
+                branchCode: o.branch.code,
+                lineCount: o.lines.length,
+                totalVarianceCost: o.lines.reduce((s, l) => s + Math.abs(l.varianceCost ?? 0), 0),
+                lines: o.lines.map((l) => ({
+                  name: l.item.name,
+                  unit: l.item.unit,
+                  systemQty: l.systemQty,
+                  physicalQty: l.physicalQty,
+                  variance: l.variance,
+                })),
+              }))}
+            />
+          </section>
+
           <section id="ulasan">
             <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-bold text-brand-navy">
               <Star className="h-5 w-5 text-rainbow-yellow" />
