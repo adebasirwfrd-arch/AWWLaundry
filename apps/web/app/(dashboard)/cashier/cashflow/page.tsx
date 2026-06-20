@@ -25,6 +25,7 @@ export default async function CashierCashflowPage() {
         initialData={data}
         showBranchFilter={false}
         defaultBranchId={branchId}
+        branchLabel={session.user.branchName}
       />
     </DashboardShell>
   );

@@ -39,9 +39,9 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/owner', label: 'Dashboard', icon: LayoutDashboard, roles: [Role.OWNER, Role.SUPER_ADMIN] },
   { href: '/owner/orders', label: 'Order', icon: ClipboardList, roles: [Role.OWNER, Role.SUPER_ADMIN, Role.MANAGER] },
   { href: '/owner/cashflow', label: 'Cashflow', icon: Landmark, roles: [Role.OWNER, Role.SUPER_ADMIN, Role.MANAGER] },
+  { href: '/cashier', label: 'POS Kasir', icon: ShoppingCart, roles: [Role.CASHIER, Role.MANAGER, Role.OWNER] },
   { href: '/cashier/cashflow', label: 'Cashflow', icon: Landmark, roles: [Role.CASHIER] },
   { href: '/manager', label: 'Dashboard', icon: LayoutDashboard, roles: [Role.MANAGER] },
-  { href: '/cashier', label: 'POS Kasir', icon: ShoppingCart, roles: [Role.CASHIER, Role.MANAGER, Role.OWNER] },
   { href: '/worker', label: 'Produksi', icon: Wrench, roles: [Role.WORKER, Role.MANAGER] },
   { href: '/cashier/inbox', label: 'Kotak Masuk', icon: Inbox, roles: [Role.CASHIER, Role.MANAGER, Role.OWNER, Role.WORKER] },
   { href: '/messages', label: 'Pesan', icon: MessageSquare, roles: [Role.OWNER, Role.MANAGER, Role.CASHIER] },
@@ -53,12 +53,21 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/owner/admin-console', label: 'Admin Console', icon: Settings2, roles: [Role.OWNER, Role.SUPER_ADMIN] },
 ];
 
-function pickBottomNav(items: NavItem[]): NavItem[] {
+function pickBottomNav(items: NavItem[], role: Role): NavItem[] {
   const picked: NavItem[] = [];
   const add = (href: string) => {
     const item = items.find((i) => i.href === href);
     if (item && !picked.some((p) => p.href === item.href)) picked.push(item);
   };
+
+  if (role === Role.CASHIER) {
+    add('/cashier');
+    add('/cashier/cashflow');
+    add('/cashier/inventory');
+    add('/cashier/inbox');
+    return picked.slice(0, 4);
+  }
+
   add(items[0]?.href ?? '/owner');
   add('/cashier');
   add('/worker');
@@ -122,7 +131,7 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const visibleNav = NAV_ITEMS.filter((item) => item.roles.includes(user.role));
-  const bottomNav = pickBottomNav(visibleNav);
+  const bottomNav = pickBottomNav(visibleNav, user.role);
   const initials = (user.name ?? 'U')
     .split(' ')
     .map((n) => n[0])

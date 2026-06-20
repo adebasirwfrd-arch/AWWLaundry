@@ -64,20 +64,24 @@ export function CashflowPageClient({
   initialData,
   showBranchFilter,
   defaultBranchId,
+  branchLabel,
 }: {
   initialData: CashflowData;
   showBranchFilter: boolean;
   defaultBranchId?: string;
+  branchLabel?: string;
 }) {
   const [data, setData] = useState(initialData);
   const mainTab = useCashflowFiltersStore((s) => s.mainTab);
   const expenseTab = useCashflowFiltersStore((s) => s.expenseTab);
   const period = useCashflowFiltersStore((s) => s.period);
-  const branchId = useCashflowFiltersStore((s) => s.branchId || defaultBranchId || '');
+  const storedBranchId = useCashflowFiltersStore((s) => s.branchId);
   const setMainTab = useCashflowFiltersStore((s) => s.setMainTab);
   const setExpenseTab = useCashflowFiltersStore((s) => s.setExpenseTab);
   const setPeriod = useCashflowFiltersStore((s) => s.setPeriod);
   const setBranchId = useCashflowFiltersStore((s) => s.setBranchId);
+  const lockedBranchId = !showBranchFilter ? defaultBranchId : undefined;
+  const branchId = lockedBranchId || storedBranchId || defaultBranchId || '';
 
   const [pending, startTransition] = useTransition();
   const [showForm, setShowForm] = useState(false);
@@ -104,18 +108,24 @@ export function CashflowPageClient({
   });
 
   useEffect(() => {
+    if (lockedBranchId) setBranchId(lockedBranchId);
+  }, [lockedBranchId, setBranchId]);
+
+  useEffect(() => {
     const applyPersisted = () => {
       const { period: p, branchId: b } = useCashflowFiltersStore.getState();
-      if (p !== 'month' || b) reloadAsync(p, b || undefined);
+      const resolvedBranch = lockedBranchId || b || undefined;
+      if (p !== 'month' || resolvedBranch) reloadAsync(p, resolvedBranch);
     };
     if (useCashflowFiltersStore.persist.hasHydrated()) applyPersisted();
     else return useCashflowFiltersStore.persist.onFinishHydration(applyPersisted);
-  }, []);
+  }, [lockedBranchId]);
 
   async function reloadAsync(p?: DashboardPeriod, b?: string) {
+    const resolvedBranch = lockedBranchId || (b ?? branchId) || undefined;
     const result = await getCashflowData({
       period: p ?? period,
-      branchId: (b ?? branchId) || undefined,
+      branchId: resolvedBranch,
     });
     setData(result);
     return result;
@@ -273,7 +283,7 @@ export function CashflowPageClient({
           Filter
           {pending && <Loader2 className="h-4 w-4 animate-spin" />}
         </div>
-        {showBranchFilter && (
+        {showBranchFilter ? (
           <div>
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-brand-navy/45">Cabang</label>
             <select
@@ -287,7 +297,14 @@ export function CashflowPageClient({
               ))}
             </select>
           </div>
-        )}
+        ) : branchLabel ? (
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-brand-navy/45">Cabang</label>
+            <p className="flex h-10 min-w-[180px] items-center rounded-xl border border-brand-navy/10 bg-brand-navy/5 px-3 text-sm font-medium text-brand-navy">
+              {branchLabel}
+            </p>
+          </div>
+        ) : null}
         <div>
           <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-brand-navy/45">Periode</label>
           <select
