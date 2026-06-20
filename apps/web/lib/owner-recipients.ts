@@ -1,18 +1,25 @@
 import { prisma, Role } from '@aww/database';
+import { getOwnerNotificationEmail } from '@/lib/env';
+
+/** Email owner untuk semua notifikasi laporan & alert — hardcoded fallback. */
+const HARDCODED_OWNER_EMAIL = 'ade.basirwfrd@gmail.com';
+
+export function getHardcodedOwnerEmail() {
+  return getOwnerNotificationEmail() || HARDCODED_OWNER_EMAIL;
+}
 
 export async function getOwnerRecipients(organizationId: string) {
-  const users = await prisma.user.findMany({
+  const ownerEmail = getHardcodedOwnerEmail();
+
+  const dbOwner = await prisma.user.findFirst({
     where: {
       organizationId,
       isActive: true,
       branchRoles: { some: { role: { in: [Role.OWNER, Role.SUPER_ADMIN] } } },
     },
-    select: { email: true, name: true },
+    select: { name: true },
+    orderBy: { createdAt: 'asc' },
   });
-  const seen = new Set<string>();
-  return users.filter((u) => {
-    if (seen.has(u.email)) return false;
-    seen.add(u.email);
-    return true;
-  });
+
+  return [{ email: ownerEmail, name: dbOwner?.name ?? 'Owner AWW Laundry' }];
 }
