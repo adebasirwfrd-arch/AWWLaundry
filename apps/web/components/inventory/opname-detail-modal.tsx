@@ -205,13 +205,13 @@ export function OpnameDetailModal({
           {canApprove && opname.status === 'PENDING_APPROVAL' && (
             <>
               <Button onClick={handleApprove} disabled={pending}>
-                <Check className="h-4 w-4" /> Setujui
+                <Check className="h-4 w-4" /> Approve & Sesuaikan Stok
               </Button>
               <Button variant="outline" onClick={handleModify} disabled={pending}>
                 <Pencil className="h-4 w-4" /> Modify / Revisi
               </Button>
-              <Button variant="outline" onClick={handleReject} disabled={pending}>
-                <X className="h-4 w-4" /> Tolak
+              <Button variant="danger" onClick={handleReject} disabled={pending}>
+                <X className="h-4 w-4" /> Reject
               </Button>
             </>
           )}

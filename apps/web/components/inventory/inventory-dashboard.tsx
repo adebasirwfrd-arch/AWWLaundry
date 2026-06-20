@@ -6,11 +6,13 @@ import {
   AlertTriangle,
   ClipboardCheck,
   History,
+  Landmark,
   Package,
   Plus,
   TrendingDown,
   Wallet,
 } from 'lucide-react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -23,6 +25,7 @@ import {
   createStockOpname,
   getStockOpnameDetail,
   recordStockMovement,
+  rejectStockOpname,
   submitStockOpnameForApproval,
   updateOpnameCash,
   updateOpnameLine,
@@ -88,6 +91,10 @@ interface InventoryDashboardProps {
     lowStock: InventoryItem[];
     unfinishedOpname: StockOpname | null;
     expectedCash: number;
+    actualCash: number | null;
+    cashVariance: number | null;
+    pendingApprovalCount: number;
+    lastOpnameApprovedAt: Date | string | null;
   };
   userRole: string;
   lockBranch?: boolean;
@@ -181,7 +188,9 @@ export function InventoryDashboard({
 
   const isOwner = userRole === 'OWNER' || userRole === 'SUPER_ADMIN';
   const isCashier = userRole === 'CASHIER';
-  const canManageMaster = isOwner || userRole === 'MANAGER';
+  const isManager = userRole === 'MANAGER';
+  const canSubmitOpname = isCashier || isManager || isOwner;
+  const canManageMaster = isOwner || isManager;
   const isPendingApproval = activeOpname?.status === 'PENDING_APPROVAL';
   const [detailOpname, setDetailOpname] = useState<OpnameDetailData | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -432,6 +441,22 @@ export function InventoryDashboard({
     });
   }
 
+  function rejectOpname() {
+    if (!activeOpname) return;
+    const reason = window.prompt('Alasan penolakan (opsional):') ?? undefined;
+    startTransition(async () => {
+      try {
+        await rejectStockOpname(activeOpname.id, reason || undefined, branchId);
+        toast.success('Opname ditolak — staff akan menerima notifikasi');
+        setActiveOpname(null);
+        setOpnameStep('count');
+        refreshData('opname');
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Gagal menolak');
+      }
+    });
+  }
+
   function cancelOpname() {
     if (!activeOpname) return;
     if (!confirm('Batalkan stock opname ini? Sesi akan dihapus dan Anda bisa memulai baru.')) return;
@@ -494,8 +519,66 @@ export function InventoryDashboard({
                 ? 'Berjalan'
                 : 'Tidak ada'
           }
+          subtitle={
+            summary.pendingApprovalCount > 0
+              ? `${summary.pendingApprovalCount} menunggu persetujuan`
+              : summary.lastOpnameApprovedAt
+                ? `Terakhir: ${new Date(summary.lastOpnameApprovedAt).toLocaleDateString('id-ID')}`
+                : undefined
+          }
           icon={ClipboardCheck}
-          warn={!!activeOpname}
+          warn={!!activeOpname || summary.pendingApprovalCount > 0}
+          onClick={() => {
+            setTab('opname');
+            syncUrl('opname', activeOpname ? opnameStep : undefined);
+          }}
+        />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <SummaryCard
+          title="Nilai Kas Seharusnya"
+          value={formatCurrency(summary.expectedCash)}
+          subtitle="Saldo sistem (tunai)"
+          icon={Wallet}
+        />
+        <SummaryCard
+          title="Rekonsiliasi Aktual"
+          value={
+            summary.actualCash != null
+              ? formatCurrency(summary.actualCash)
+              : activeOpname?.cashActual != null
+                ? formatCurrency(activeOpname.cashActual)
+                : '—'
+          }
+          subtitle="Kas fisik terakhir diopname"
+          icon={Landmark}
+        />
+        <SummaryCard
+          title="Selisih Kas"
+          value={
+            summary.cashVariance != null
+              ? formatCurrency(summary.cashVariance)
+              : activeOpname?.cashVariance != null
+                ? formatCurrency(activeOpname.cashVariance)
+                : '—'
+          }
+          subtitle={
+            (summary.cashVariance ?? activeOpname?.cashVariance) != null
+              ? (summary.cashVariance ?? activeOpname?.cashVariance) === 0
+                ? 'Sesuai sistem'
+                : 'Perlu penjelasan'
+              : 'Belum direkonsiliasi'
+          }
+          icon={Wallet}
+          warn={(summary.cashVariance ?? activeOpname?.cashVariance ?? 0) !== 0}
+        />
+        <SummaryCard
+          title="Cashflow Cabang"
+          value={formatCurrency(summary.expectedCash)}
+          subtitle={isOwner || isManager ? 'Lihat detail di Cashflow' : 'Nilai kas periode berjalan'}
+          icon={Landmark}
+          href={isOwner || isManager ? '/owner/cashflow' : undefined}
         />
       </div>
 
@@ -747,6 +830,11 @@ export function InventoryDashboard({
                         Opname sudah diajukan. Owner akan review di <strong>Kotak Masuk</strong> dan menerima email notifikasi.
                       </div>
                     )}
+                    {isOwner && isPendingApproval && (
+                      <div className="rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                        Review opname dari staff. Setujui untuk menyesuaikan stok, atau <strong>Reject</strong> jika tidak sesuai.
+                      </div>
+                    )}
                     {activeOpname.lines.map((line) => {
                       const v = line.variance;
                       return (
@@ -767,23 +855,25 @@ export function InventoryDashboard({
                         <p>Selisih kas: {formatCurrency(activeOpname.cashVariance ?? 0)}</p>
                       </div>
                     )}
-                    {isPendingApproval && isOwner && (
-                      <div className="flex gap-2 pt-2">
+                    {isOwner && isPendingApproval && (
+                      <div className="flex flex-wrap gap-2 pt-2">
                         <Button onClick={approveOpname} disabled={pending}>Approve & Sesuaikan Stok</Button>
-                        <Button variant="outline" onClick={cancelOpname} disabled={pending}>Tolak</Button>
+                        <Button variant="danger" onClick={rejectOpname} disabled={pending}>Reject</Button>
                       </div>
                     )}
-                    {!isPendingApproval && isOwner && (
-                      <Button onClick={approveOpname} disabled={pending}>Approve & Sesuaikan Stok</Button>
-                    )}
-                    {!isPendingApproval && !isOwner && (
+                    {!isPendingApproval && canSubmitOpname && (
                       <Button onClick={submitForApproval} disabled={pending}>
-                        {isCashier ? 'Submit ke Owner' : 'Ajukan Persetujuan Owner'}
+                        {isCashier || isManager ? 'Submit & Request Approval' : 'Ajukan Persetujuan'}
                       </Button>
+                    )}
+                    {isOwner && !isPendingApproval && (
+                      <p className="text-xs text-brand-navy/50">
+                        Sebagai owner, ajukan opname ini lalu approve dari <a href="/cashier/inbox#opname" className="text-rainbow-cyan hover:underline">Kotak Masuk</a> setelah review.
+                      </p>
                     )}
                     {isPendingApproval && isOwner && (
                       <p className="text-xs text-brand-navy/50">
-                        Atau approve dari <a href="/cashier/inbox#opname" className="text-rainbow-cyan hover:underline">Kotak Masuk</a>
+                        Atau review dari <a href="/cashier/inbox#opname" className="text-rainbow-cyan hover:underline">Kotak Masuk</a>
                       </p>
                     )}
                   </CardContent>
@@ -842,23 +932,38 @@ export function InventoryDashboard({
 function SummaryCard({
   title,
   value,
+  subtitle,
   icon: Icon,
   warn,
+  href,
+  onClick,
 }: {
   title: string;
   value: string;
+  subtitle?: string;
   icon: typeof Package;
   warn?: boolean;
+  href?: string;
+  onClick?: () => void;
 }) {
-  return (
-    <Card className={warn ? 'border-amber-400' : ''}>
+  const content = (
+    <Card
+      className={`transition-shadow ${warn ? 'border-amber-400' : ''} ${href || onClick ? 'cursor-pointer hover:shadow-aww-md' : ''}`}
+      onClick={onClick}
+    >
       <CardContent className="flex items-center gap-3 p-4">
-        <Icon className={`h-8 w-8 ${warn ? 'text-amber-500' : 'text-brand-orange'}`} />
-        <div>
+        <Icon className={`h-8 w-8 shrink-0 ${warn ? 'text-amber-500' : 'text-brand-orange'}`} />
+        <div className="min-w-0">
           <p className="text-xs text-brand-navy/50">{title}</p>
-          <p className="font-display text-xl font-bold">{value}</p>
+          <p className="font-display text-lg font-bold leading-tight sm:text-xl">{value}</p>
+          {subtitle && <p className="mt-0.5 truncate text-[11px] text-brand-navy/45">{subtitle}</p>}
         </div>
       </CardContent>
     </Card>
   );
+
+  if (href) {
+    return <Link href={href}>{content}</Link>;
+  }
+  return content;
 }

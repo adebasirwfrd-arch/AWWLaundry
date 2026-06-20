@@ -809,19 +809,36 @@ export async function getExpectedBranchCash(branchId?: string) {
 }
 
 export async function getInventorySummary(branchId?: string) {
-  const { branchId: bid } = await inventoryCtx(branchId);
+  const { session, branchId: bid, organizationId } = await inventoryCtx(branchId);
+  const role = session.user.role as Role;
   const items = await prisma.inventoryItem.findMany({ where: { branchId: bid } });
 
   const lowStock = items.filter((i) => i.currentStock <= i.minStock);
   const totalValue = items.reduce((s, i) => s + i.currentStock * (i.unitCost ?? 0), 0);
-  const [unfinishedOpname, expectedCash] = await Promise.all([
+  const [unfinishedOpname, expectedCash, lastApproved, pendingApprovalCount] = await Promise.all([
     prisma.stockOpname.findFirst({
       where: { branchId: bid, status: { in: ['DRAFT', 'COUNTING', 'PENDING_APPROVAL'] } },
       orderBy: { createdAt: 'desc' },
       include: { lines: { include: { item: { select: { name: true, unit: true, sku: true } } } } },
     }),
     computeExpectedBranchCash(bid),
+    prisma.stockOpname.findFirst({
+      where: { branchId: bid, status: 'APPROVED' },
+      orderBy: { approvedAt: 'desc' },
+      select: { cashActual: true, cashVariance: true, approvedAt: true },
+    }),
+    prisma.stockOpname.count({
+      where: {
+        status: 'PENDING_APPROVAL',
+        ...(isApprover(role)
+          ? { branch: { organizationId } }
+          : { branchId: bid }),
+      },
+    }),
   ]);
+
+  const actualCash = unfinishedOpname?.cashActual ?? lastApproved?.cashActual ?? null;
+  const cashVariance = unfinishedOpname?.cashVariance ?? lastApproved?.cashVariance ?? null;
 
   return {
     itemCount: items.length,
@@ -830,5 +847,9 @@ export async function getInventorySummary(branchId?: string) {
     lowStock,
     unfinishedOpname,
     expectedCash,
+    actualCash,
+    cashVariance,
+    pendingApprovalCount,
+    lastOpnameApprovedAt: lastApproved?.approvedAt ?? null,
   };
 }

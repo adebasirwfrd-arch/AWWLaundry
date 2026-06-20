@@ -122,7 +122,9 @@ export function InboxOpnameApprovals({
                 <p>{o.lineCount} item · Selisih nilai {formatCurrency(o.totalVarianceCost)}</p>
                 {o.cashVariance != null && <p>Selisih kas: {formatCurrency(o.cashVariance)}</p>}
               </div>
-              <p className="mt-2 text-xs font-medium text-rainbow-cyan">Klik untuk review & approve</p>
+              <p className="mt-2 text-xs font-medium text-rainbow-cyan">
+                Klik untuk review — Approve & Sesuaikan Stok atau Reject
+              </p>
             </CardContent>
           </Card>
         ))}
