@@ -9,6 +9,11 @@ const config: ExpoConfig = {
   userInterfaceStyle: 'light',
   newArchEnabled: true,
   scheme: 'awwlaundry',
+  androidStatusBar: {
+    backgroundColor: '#1E3A6E',
+    barStyle: 'light-content',
+    translucent: true,
+  },
   splash: {
     image: './assets/splash-icon.png',
     resizeMode: 'contain',

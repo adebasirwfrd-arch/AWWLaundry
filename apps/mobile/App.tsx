@@ -2,15 +2,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, BackHandler, Platform, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
+import * as NavigationBar from 'expo-navigation-bar';
+import * as SystemUI from 'expo-system-ui';
 import * as WebBrowser from 'expo-web-browser';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { WebView, type WebViewNavigation } from 'react-native-webview';
+import { getNativeUserAgent } from './lib/user-agent';
+import { NATIVE_BOOTSTRAP_JS } from './lib/injected-native';
 
 WebBrowser.maybeCompleteAuthSession();
 
 const APP_URL = (Constants.expoConfig?.extra?.appUrl as string | undefined) ?? 'https://aww-laundry.vercel.app';
 const APP_ORIGIN = APP_URL.replace(/\/$/, '');
-const START_URL = `${APP_ORIGIN}/customer`;
+const START_URL = `${APP_ORIGIN}/customer?native=1`;
 
 type GoogleAuthMessage = {
   type: 'google-auth';
@@ -38,6 +41,13 @@ export default function App() {
   const oauthInFlight = useRef(false);
   const [canGoBack, setCanGoBack] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    void SystemUI.setBackgroundColorAsync('#1E3A6E');
+    void NavigationBar.setBackgroundColorAsync('#FFFFFF');
+    void NavigationBar.setButtonStyleAsync('dark');
+  }, []);
 
   const finishOAuth = useCallback((targetUrl: string) => {
     oauthInFlight.current = false;
@@ -121,40 +131,43 @@ export default function App() {
   );
 
   return (
-    <SafeAreaProvider>
-      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        <StatusBar style="dark" backgroundColor="#FAFAF8" />
-        <WebView
-          ref={webRef}
-          source={{ uri: START_URL }}
-          onNavigationStateChange={onNavigationStateChange}
-          onShouldStartLoadWithRequest={(request) => !interceptOAuthNavigation(request.url)}
-          onMessage={(event) => handleWebMessage(event.nativeEvent.data)}
-          onLoadStart={() => setLoading(true)}
-          onLoadEnd={() => setLoading(false)}
-          allowsBackForwardNavigationGestures
-          pullToRefreshEnabled
-          sharedCookiesEnabled
-          thirdPartyCookiesEnabled
-          setSupportMultipleWindows={false}
-          originWhitelist={['https://*', 'http://localhost:*']}
-          applicationNameForUserAgent="AWWLaundryApp"
-          style={styles.webview}
-        />
-        {loading && (
-          <View style={styles.loader}>
-            <ActivityIndicator size="large" color="#1E3A6E" />
-          </View>
-        )}
-      </SafeAreaView>
-    </SafeAreaProvider>
+    <View style={styles.container}>
+      <StatusBar style="light" translucent backgroundColor="transparent" />
+      <WebView
+        ref={webRef}
+        source={{ uri: START_URL }}
+        userAgent={getNativeUserAgent()}
+        injectedJavaScriptBeforeContentLoaded={NATIVE_BOOTSTRAP_JS}
+        onNavigationStateChange={onNavigationStateChange}
+        onShouldStartLoadWithRequest={(request) => !interceptOAuthNavigation(request.url)}
+        onMessage={(event) => handleWebMessage(event.nativeEvent.data)}
+        onLoadStart={() => setLoading(true)}
+        onLoadEnd={() => setLoading(false)}
+        allowsBackForwardNavigationGestures
+        pullToRefreshEnabled={false}
+        sharedCookiesEnabled
+        thirdPartyCookiesEnabled
+        setSupportMultipleWindows={false}
+        setBuiltInZoomControls={false}
+        setDisplayZoomControls={false}
+        overScrollMode="never"
+        allowsLinkPreview={false}
+        originWhitelist={['https://*', 'http://localhost:*']}
+        style={styles.webview}
+      />
+      {loading && (
+        <View style={styles.loader}>
+          <ActivityIndicator size="large" color="#1E3A6E" />
+        </View>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAF8',
+    backgroundColor: '#1E3A6E',
   },
   webview: {
     flex: 1,
