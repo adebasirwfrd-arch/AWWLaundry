@@ -27,6 +27,7 @@ function linkFor(type: string, data: string): string {
   } catch {
     /* ignore */
   }
+  if (type === 'MACHINE_TROUBLE') return '/cashier/inbox#mesin';
   if (type === 'ORDER_REVIEW') return '/cashier/inbox#ulasan';
   if (type === 'ORDER_CONFIRMATION') return '/cashier/inbox';
   if (type === 'STOCK_OPNAME_DRAFT') return '/cashier/inbox#opname-draft';

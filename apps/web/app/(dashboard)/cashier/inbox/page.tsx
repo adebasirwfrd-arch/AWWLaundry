@@ -7,17 +7,25 @@ import { PendingOrders } from '@/components/pos/pending-orders';
 import { InboxReviews } from '@/components/inbox/inbox-reviews';
 import { InboxOpnameApprovals } from '@/components/inbox/inbox-opname-approvals';
 import { InboxOpnameDrafts } from '@/components/inbox/inbox-opname-drafts';
+import { InboxMachineTroubles } from '@/components/inbox/inbox-machine-troubles';
 import { listPendingOpnameApprovals, listUnfinishedOpnamesForInbox } from '@/app/actions/inventory';
-import { Inbox, MessageSquare, ArrowRight, Star, ClipboardCheck } from 'lucide-react';
+import { Inbox, MessageSquare, ArrowRight, Star, ClipboardCheck, AlertTriangle } from 'lucide-react';
 
 const INBOX_ROLES = [Role.CASHIER, Role.MANAGER, Role.OWNER, Role.SUPER_ADMIN, Role.WORKER];
 
 export default async function CashierInboxPage() {
   const session = await requireAuth(INBOX_ROLES);
   const isWorker = session.user.role === Role.WORKER;
+  const hasInventoryInbox =
+    session.user.role === Role.CASHIER ||
+    session.user.role === Role.MANAGER ||
+    session.user.role === Role.OWNER ||
+    session.user.role === Role.SUPER_ADMIN;
   const canApproveOpname = session.user.role === Role.OWNER || session.user.role === Role.SUPER_ADMIN;
+  const canSeeMachineTroubles = canApproveOpname;
 
-  const [pending, recentReviews, recentChats, pendingOpnames, draftOpnames] = await Promise.all([
+  const [pending, recentReviews, recentChats, pendingOpnames, draftOpnames, machineTroubles] =
+    await Promise.all([
     isWorker
       ? Promise.resolve([])
       : prisma.order.findMany({
@@ -54,10 +62,36 @@ export default async function CashierInboxPage() {
             messages: { orderBy: { createdAt: 'desc' }, take: 1 },
           },
         }),
-    listPendingOpnameApprovals(
-      canApproveOpname ? undefined : session.user.branchId
-    ),
-    listUnfinishedOpnamesForInbox(),
+    hasInventoryInbox
+      ? listPendingOpnameApprovals(canApproveOpname ? undefined : session.user.branchId)
+      : Promise.resolve([]),
+    hasInventoryInbox ? listUnfinishedOpnamesForInbox() : Promise.resolve([]),
+    canSeeMachineTroubles
+      ? prisma.machineLog.findMany({
+          where: {
+            eventType: 'TROUBLE_REPORTED',
+            resolvedAt: null,
+            machine: {
+              status: 'TROUBLE',
+              branch: { organizationId: session.user.organizationId },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+          include: {
+            machine: {
+              select: {
+                id: true,
+                name: true,
+                type: true,
+                status: true,
+                branch: { select: { name: true, code: true } },
+              },
+            },
+            reportedBy: { select: { name: true } },
+          },
+        })
+      : Promise.resolve([]),
   ]);
 
   return (
@@ -110,7 +144,31 @@ export default async function CashierInboxPage() {
         )}
 
         <div className={`space-y-6 ${isWorker ? 'max-w-2xl' : ''}`}>
-          <section id="opname-draft">
+          {canSeeMachineTroubles && (
+            <section id="mesin">
+              <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-bold text-brand-navy">
+                <AlertTriangle className="h-5 w-5 text-red-500" />
+                Gangguan Mesin
+                {machineTroubles.length > 0 && (
+                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+                    {machineTroubles.length}
+                  </span>
+                )}
+              </h2>
+              <InboxMachineTroubles
+                reports={machineTroubles.map((r) => ({
+                  id: r.id,
+                  note: r.note,
+                  createdAt: r.createdAt.toISOString(),
+                  machine: r.machine,
+                  reportedBy: r.reportedBy,
+                }))}
+              />
+            </section>
+          )}
+
+          {hasInventoryInbox && (
+            <section id="opname-draft">
             <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-bold text-brand-navy">
               <ClipboardCheck className="h-5 w-5 text-sky-500" />
               Stock Opname Belum Selesai
@@ -136,7 +194,9 @@ export default async function CashierInboxPage() {
               }))}
             />
           </section>
+          )}
 
+          {hasInventoryInbox && (
           <section id="opname">
             <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-bold text-brand-navy">
               <ClipboardCheck className="h-5 w-5 text-brand-orange" />
@@ -175,6 +235,7 @@ export default async function CashierInboxPage() {
               />
             </Suspense>
           </section>
+          )}
 
           <section id="ulasan">
             <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-bold text-brand-navy">

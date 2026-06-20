@@ -43,7 +43,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/cashier', label: 'POS Kasir', icon: ShoppingCart, roles: [Role.CASHIER, Role.MANAGER, Role.OWNER] },
   { href: '/cashier/cashflow', label: 'Cashflow', icon: Landmark, roles: [Role.CASHIER] },
   { href: '/manager', label: 'Dashboard', icon: LayoutDashboard, roles: [Role.MANAGER] },
-  { href: '/worker', label: 'Produksi', icon: Wrench, roles: [Role.WORKER, Role.MANAGER] },
+  { href: '/worker', label: 'Board Produksi', icon: Wrench, roles: [Role.WORKER, Role.MANAGER, Role.CASHIER, Role.OWNER, Role.SUPER_ADMIN] },
   { href: '/cashier/inbox', label: 'Kotak Masuk', icon: Inbox, roles: [Role.CASHIER, Role.MANAGER, Role.OWNER, Role.WORKER] },
   { href: '/messages', label: 'Pesan', icon: MessageSquare, roles: [Role.OWNER, Role.MANAGER, Role.CASHIER] },
   { href: '/discussion', label: 'Diskusi', icon: MessagesSquare, roles: [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.WORKER] },
@@ -64,9 +64,16 @@ function pickBottomNav(items: NavItem[], role: Role): NavItem[] {
 
   if (role === Role.CASHIER) {
     add('/cashier');
-    add('/cashier/cashflow');
+    add('/worker');
     add('/cashier/inventory');
     add('/cashier/inbox');
+    return picked.slice(0, 4);
+  }
+
+  if (role === Role.WORKER) {
+    add('/worker');
+    add('/cashier/inbox');
+    add('/discussion');
     return picked.slice(0, 4);
   }
 

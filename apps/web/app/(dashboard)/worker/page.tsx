@@ -5,7 +5,7 @@ import { WorkerBoard } from '@/components/worker/worker-board';
 import { prisma } from '@aww/database';
 
 export default async function WorkerPage() {
-  const session = await requireAuth([Role.WORKER, Role.MANAGER, Role.OWNER]);
+  const session = await requireAuth([Role.WORKER, Role.MANAGER, Role.OWNER, Role.SUPER_ADMIN, Role.CASHIER]);
 
   const [orders, machines] = await Promise.all([
     prisma.order.findMany({

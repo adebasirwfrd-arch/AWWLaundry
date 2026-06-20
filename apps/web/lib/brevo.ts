@@ -160,6 +160,37 @@ export async function sendStockOpnamePendingEmail(input: {
   });
 }
 
+export async function sendMachineTroubleEmail(input: {
+  to: string;
+  name: string;
+  machineName: string;
+  machineType: string;
+  branchName: string;
+  reportedBy: string;
+  note: string;
+  inboxUrl: string;
+}) {
+  return sendEmail({
+    to: { email: input.to, name: input.name },
+    subject: `[AWW Laundry] Gangguan mesin — ${input.machineName} (${input.branchName})`,
+    htmlContent: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#1E3A6E">
+        <h2 style="color:#DC2626">Laporan Gangguan Mesin</h2>
+        <p>Halo ${input.name},</p>
+        <p><strong>${input.reportedBy}</strong> melaporkan masalah pada peralatan cabang:</p>
+        <div style="background:#FEF2F2;border-radius:12px;padding:16px;margin:16px 0;border:1px solid #FECACA">
+          <p style="margin:0 0 8px"><strong>${input.machineName}</strong> <span style="color:#888">(${input.machineType})</span></p>
+          <p style="margin:0 0 8px">Cabang: <strong>${input.branchName}</strong></p>
+          <p style="margin:0">Keterangan: ${input.note}</p>
+        </div>
+        <p>Segera tindak lanjuti dan update status mesin di aplikasi.</p>
+        <p><a href="${input.inboxUrl}" style="background:#FF8C2A;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block">Buka Kotak Masuk</a></p>
+        <p style="color:#888;font-size:12px;margin-top:24px">AWW Laundry — FRESH • CLEAN • FUN</p>
+      </div>
+    `,
+  });
+}
+
 export async function sendCashflowReportEmail(input: {
   to: string;
   name: string;

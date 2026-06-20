@@ -3,6 +3,7 @@
 import { prisma } from '@aww/database';
 import { requireAuth } from '@/lib/session';
 import { createAuditLog, getBranchPrice, updateDailySummary } from '@/lib/audit';
+import { notifyMachineTroubleReported } from '@/lib/machine-notifications';
 import { notifyCustomerOrderCreated, notifyCustomerOrderStatus } from '@/lib/order-notifications';
 import { ORDER_STATUS_FLOW, PRODUCTION_GATE_MESSAGE, generateOrderNumber } from '@aww/shared';
 import { revalidatePath } from 'next/cache';
@@ -288,6 +289,14 @@ export async function receivePayment(orderId: string, method: string, amount: nu
 export async function reportMachineTrouble(machineId: string, note: string) {
   const session = await requireAuth();
   const { branchId, id: userId, organizationId } = session.user;
+  const trimmed = note.trim();
+  if (!trimmed) throw new Error('Deskripsi masalah wajib diisi');
+
+  const machine = await prisma.machine.findFirst({
+    where: { id: machineId, branchId },
+    include: { branch: { select: { name: true } } },
+  });
+  if (!machine) throw new Error('Mesin tidak ditemukan');
 
   await prisma.machine.update({
     where: { id: machineId },
@@ -299,7 +308,7 @@ export async function reportMachineTrouble(machineId: string, note: string) {
       machineId,
       eventType: 'TROUBLE_REPORTED',
       reportedById: userId,
-      note,
+      note: trimmed,
     },
   });
 
@@ -309,10 +318,24 @@ export async function reportMachineTrouble(machineId: string, note: string) {
     'Machine',
     machineId,
     null,
-    { note }
+    { note: trimmed, machineName: machine.name }
   );
+
+  void notifyMachineTroubleReported({
+    machineId,
+    machineName: machine.name,
+    machineType: machine.type,
+    branchId,
+    branchName: machine.branch.name,
+    note: trimmed,
+    reportedByName: session.user.name ?? 'Staff',
+    reportedById: userId,
+  }).catch(console.error);
 
   revalidatePath('/worker');
   revalidatePath('/owner');
+  revalidatePath('/cashier/inbox');
   revalidatePath('/owner/audit-trail');
+
+  return { ok: true };
 }
