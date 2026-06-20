@@ -3,6 +3,7 @@ import { Inter, Plus_Jakarta_Sans } from 'next/font/google';
 import '@aww/design-tokens/css-variables.css';
 import './globals.css';
 import '../styles/native-responsive.css';
+import '../styles/web-scroll.css';
 import { Providers } from './providers';
 
 const inter = Inter({

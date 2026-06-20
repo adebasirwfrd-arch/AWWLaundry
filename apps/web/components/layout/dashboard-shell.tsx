@@ -181,7 +181,7 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
   );
 
   return (
-    <div data-dashboard-root className="relative flex h-dvh min-h-0 flex-col overflow-hidden bg-aww-brand-hero">
+    <div data-dashboard-root className="relative flex min-h-dvh flex-col bg-aww-brand-hero">
 
       {/* Desktop sidebar — tampil di landscape lebar via native-responsive.css */}
       <aside
@@ -232,7 +232,7 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
         </>
       )}
 
-      <div data-dashboard-content className="relative z-10 flex h-full min-h-0 flex-1 flex-col lg:ml-64">
+      <div data-dashboard-content className="relative z-10 flex min-h-0 flex-1 flex-col lg:ml-64">
         {/* Mobile top bar */}
         <header
           data-dashboard-mobile-header

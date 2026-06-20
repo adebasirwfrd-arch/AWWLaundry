@@ -7,6 +7,7 @@ import { ClickBubbleBurst } from '@/components/animations/click-bubble-burst';
 import { NativeAppBootstrap } from '@/components/native-app-bootstrap';
 import { NativeOverlayGuard } from '@/components/native-overlay-guard';
 import { NativeViewportSync } from '@/components/native-viewport-sync';
+import { WebScrollEnhancer } from '@/components/web-scroll-enhancer';
 import { ThemeProvider } from '@/components/theme/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
 import { useNativeLiteUI } from '@/hooks/use-native-lite-ui';
@@ -31,6 +32,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <QueryClientProvider client={queryClient}>
           <NativeAppBootstrap />
           <NativeViewportSync />
+          <WebScrollEnhancer />
           <AppEffects />
           <Toaster />
           {children}
