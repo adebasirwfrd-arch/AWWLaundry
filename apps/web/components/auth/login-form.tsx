@@ -8,6 +8,7 @@ import { signIn } from 'next-auth/react';
 import { Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { AuthCard, AuthDivider, AuthField } from '@/components/auth/auth-field';
 import { GoogleSignInButton } from '@/components/auth/google-sign-in-button';
+import { safeCallbackUrl } from '@/lib/callback-url';
 
 interface LoginFormProps {
   appName: string;
@@ -38,6 +39,7 @@ export function LoginForm({ appName, googleEnabled }: LoginFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const callbackUrl = safeCallbackUrl(searchParams.get('callbackUrl'));
 
   useEffect(() => {
     const oauthError = oauthErrorMessage(searchParams.get('error'));
@@ -54,7 +56,7 @@ export function LoginForm({ appName, googleEnabled }: LoginFormProps) {
       setError('Email atau password salah');
       return;
     }
-    router.push('/');
+    router.push(callbackUrl);
     router.refresh();
   }
 
@@ -135,7 +137,7 @@ export function LoginForm({ appName, googleEnabled }: LoginFormProps) {
       {googleEnabled && (
         <>
           <AuthDivider label="Atau" />
-          <GoogleSignInButton callbackUrl="/" label="Masuk dengan Google" />
+          <GoogleSignInButton callbackUrl={callbackUrl} label="Masuk dengan Google" />
           <p className="mt-3 text-center text-xs text-brand-navy/45">
             Belum punya akun? Google akan otomatis membuat akun baru.
           </p>

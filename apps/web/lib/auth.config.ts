@@ -27,7 +27,16 @@ export const authConfig = {
         nextUrl.pathname.startsWith('/api/auth');
 
       if (isPublic) return true;
-      if (!isLoggedIn && !isAuthPage) return false;
+
+      if (!isLoggedIn && !isAuthPage) {
+        const login = new URL('/login', nextUrl);
+        const returnPath = nextUrl.pathname + nextUrl.search;
+        if (returnPath && returnPath !== '/') {
+          login.searchParams.set('callbackUrl', returnPath);
+        }
+        return Response.redirect(login);
+      }
+
       if (isLoggedIn && isAuthPage) {
         return Response.redirect(new URL('/', nextUrl));
       }
