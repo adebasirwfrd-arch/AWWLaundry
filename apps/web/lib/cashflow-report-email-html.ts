@@ -1,7 +1,7 @@
 import { formatCurrency, formatWeight, PAYMENT_METHOD_LABELS } from '@aww/shared';
-import type { fetchCashflowOverview } from '@/lib/cashflow-analytics';
+import type { OperationalReportData } from '@/lib/operational-report-data';
 
-type CashflowData = Awaited<ReturnType<typeof fetchCashflowOverview>>;
+type ReportData = OperationalReportData;
 
 const th = 'padding:8px 10px;text-align:left;border-bottom:1px solid #e2e8f0;font-size:12px;color:#64748b';
 const td = 'padding:8px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#1E3A6E';
@@ -20,7 +20,7 @@ export function buildCashflowReportEmailHtml(input: {
   reportTitle: string;
   periodLabel: string;
   organizationName: string;
-  data: CashflowData;
+  data: ReportData;
 }): string {
   const { data } = input;
   const { summary } = data;
@@ -44,7 +44,7 @@ export function buildCashflowReportEmailHtml(input: {
     <p style="margin:6px 0 0;opacity:0.85;font-size:13px">${input.organizationName} · ${input.periodLabel}</p>
   </div>
   <div style="padding:24px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px">
-    <p style="font-size:14px">Halo <strong>${input.name}</strong>, berikut rekap cashflow lengkap periode ini. Lampiran: <strong>PDF</strong> (chart & analisis) dan <strong>CSV</strong> (data mentah semua transaksi).</p>
+    <p style="font-size:14px">Halo <strong>${input.name}</strong>, berikut rekap operasional lengkap periode ini — <strong>cashflow, order, dan stok</strong>. Lampiran: <strong>PDF</strong> (ringkasan visual) dan <strong>CSV</strong> (semua data mentah).</p>
 
     <table style="width:100%;border-collapse:separate;border-spacing:8px;margin:16px 0">
       <tr>
@@ -135,8 +135,78 @@ export function buildCashflowReportEmailHtml(input: {
       ])
     )}
 
+    <h3 style="${sectionTitle}">Ringkasan Order</h3>
+    <p style="font-size:12px;color:#64748b;margin:0 0 8px">
+      ${data.orders.summary.total} order · ${data.orders.summary.paidCount} lunas · ${data.orders.summary.unpaidCount} belum lunas ·
+      nilai lunas ${formatCurrency(data.orders.summary.totalRevenue)}
+    </p>
+    ${table(
+      ['Status', 'Jumlah'],
+      data.orders.summary.byStatus.map((s) => [s.label, String(s.count)])
+    )}
+
+    <h3 style="${sectionTitle}">Semua Order (${data.orders.orders.length})</h3>
+    ${table(
+      ['Tanggal', 'Cabang', 'Order', 'Pelanggan', 'Layanan', 'Total', 'Status', 'Bayar'],
+      data.orders.orders.map((o) => [
+        new Date(o.createdAt).toLocaleDateString('id-ID'),
+        o.branchName,
+        o.orderNumber,
+        o.customerName,
+        o.serviceName,
+        formatCurrency(o.total),
+        o.statusLabel,
+        o.paymentStatusLabel,
+      ])
+    )}
+
+    <h3 style="${sectionTitle}">Ringkasan Stok</h3>
+    <p style="font-size:12px;color:#64748b;margin:0 0 8px">
+      ${data.stock.summary.itemCount} item inventori · ${data.stock.summary.lowStockCount} menipis ·
+      ${data.stock.summary.movementCount} pergerakan · ${data.stock.summary.opnameCount} opname
+    </p>
+
+    <h3 style="${sectionTitle}">Snapshot Inventori</h3>
+    ${table(
+      ['Cabang', 'Item', 'Stok', 'Min', 'Nilai', 'Status'],
+      data.stock.inventory.map((i) => [
+        i.branchName,
+        i.name,
+        `${i.currentStock} ${i.unit}`,
+        String(i.minStock),
+        formatCurrency(i.stockValue),
+        i.isLow ? 'MENIPIS' : 'OK',
+      ])
+    )}
+
+    <h3 style="${sectionTitle}">Pergerakan Stok (${data.stock.movements.length})</h3>
+    ${table(
+      ['Tanggal', 'Cabang', 'Item', 'Tipe', 'Qty', 'Referensi'],
+      data.stock.movements.map((m) => [
+        new Date(m.createdAt).toLocaleDateString('id-ID'),
+        m.branchName,
+        m.itemName,
+        m.type,
+        String(m.qty),
+        m.reference ?? '—',
+      ])
+    )}
+
+    <h3 style="${sectionTitle}">Stock Opname (${data.stock.opnames.length})</h3>
+    ${table(
+      ['Cabang', 'Status', 'Periode', 'Baris', 'Selisih Nilai', 'Selisih Kas'],
+      data.stock.opnames.map((o) => [
+        o.branchName,
+        o.status,
+        new Date(o.period).toLocaleDateString('id-ID'),
+        String(o.lineCount),
+        formatCurrency(o.totalVarianceCost),
+        o.cashVariance != null ? formatCurrency(o.cashVariance) : '—',
+      ])
+    )}
+
     <p style="margin-top:24px;font-size:12px;color:#64748b">
-      Data lengkap dengan semua kolom tersedia di file CSV terlampir. Chart visual ada di PDF.
+      Data lengkap termasuk detail opname per item tersedia di file CSV terlampir. Chart visual ada di PDF.
     </p>
     <p style="color:#888;font-size:11px;margin-top:20px">AWW Laundry — FRESH · CLEAN · FUN</p>
   </div>

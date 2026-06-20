@@ -210,7 +210,9 @@ export async function sendCashflowReportEmail(input: {
     htmlContent: `
       ${input.htmlContent}
       <div style="font-family:Arial,sans-serif;max-width:720px;margin:16px auto 0;text-align:center">
-        <a href="${appUrl}/owner/cashflow" style="background:#FF8C2A;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-size:14px">Buka Dashboard Cashflow</a>
+        <a href="${appUrl}/owner/cashflow" style="background:#FF8C2A;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-size:14px;margin:4px">Cashflow</a>
+        <a href="${appUrl}/owner/orders" style="background:#4A90D9;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-size:14px;margin:4px">Order</a>
+        <a href="${appUrl}/owner/inventory" style="background:#1E3A6E;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-size:14px;margin:4px">Stok</a>
       </div>
     `,
     attachments: [

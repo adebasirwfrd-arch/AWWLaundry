@@ -11,7 +11,7 @@ import { prisma } from '@aww/database';
 import type { CashflowReportKind } from '@/lib/report-periods';
 import { sendCashflowReportForOrg } from '@/lib/cashflow-reports';
 import { generateCashflowReportCsv } from '@/lib/cashflow-report-csv';
-import { fetchCashflowOverview } from '@/lib/cashflow-analytics';
+import { fetchFullOperationalReport } from '@/lib/operational-report-data';
 import { generateCashflowReportPdf } from '@/lib/cashflow-report-pdf';
 import { reportDateRange } from '@/lib/report-periods';
 
@@ -28,7 +28,7 @@ async function main() {
   console.log(`Period: ${label}`);
   console.log(`Range: ${start.toISOString()} → ${end.toISOString()}`);
 
-  const data = await fetchCashflowOverview({
+  const data = await fetchFullOperationalReport({
     organizationId: org.id,
     dateRange: { start, end },
     fullExport: true,
@@ -50,13 +50,15 @@ async function main() {
 
   const outDir = path.join(webRoot, 'tmp');
   mkdirSync(outDir, { recursive: true });
-  const pdfPath = path.join(outDir, `cashflow-${filenameSuffix}.pdf`);
-  const csvPath = path.join(outDir, `cashflow-${filenameSuffix}.csv`);
+  const pdfPath = path.join(outDir, `laporan-${filenameSuffix}.pdf`);
+  const csvPath = path.join(outDir, `laporan-${filenameSuffix}.csv`);
   writeFileSync(pdfPath, pdf);
   writeFileSync(csvPath, csv);
   console.log(`PDF saved: ${pdfPath}`);
   console.log(`CSV saved: ${csvPath}`);
-  console.log(`Summary: income=${data.summary.totalIncome} expense=${data.summary.totalExpense}`);
+  console.log(
+    `Summary: income=${data.summary.totalIncome} orders=${data.orders.summary.total} stockItems=${data.stock.summary.itemCount}`
+  );
 
   if (shouldSend) {
     const r = await sendCashflowReportForOrg(org.id, kind);

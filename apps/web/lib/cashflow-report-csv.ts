@@ -1,7 +1,7 @@
 import { formatCurrency, formatWeight, PAYMENT_METHOD_LABELS } from '@aww/shared';
-import type { fetchCashflowOverview } from '@/lib/cashflow-analytics';
+import type { OperationalReportData } from '@/lib/operational-report-data';
 
-type CashflowData = Awaited<ReturnType<typeof fetchCashflowOverview>>;
+type ReportData = OperationalReportData;
 
 function esc(v: string | number | null | undefined): string {
   const s = v == null ? '' : String(v);
@@ -17,22 +17,23 @@ function section(title: string, lines: string[]): string[] {
   return [`\n# ${title}`, ...lines];
 }
 
-/** CSV lengkap (UTF-8 BOM) — semua data cashflow periode, bisa dibuka di Excel. */
+/** CSV lengkap (UTF-8 BOM) — cashflow, order, dan stok periode. */
 export function generateCashflowReportCsv(input: {
   periodLabel: string;
   organizationName: string;
   generatedAt: Date;
-  data: CashflowData;
+  data: ReportData;
 }): Buffer {
   const { data } = input;
   const { summary } = data;
   const lines: string[] = [];
 
   lines.push(
-    row(['AWW Laundry — Laporan Cashflow']),
+    row(['AWW Laundry — Laporan Operasional']),
     row(['Organisasi', input.organizationName]),
     row(['Periode', input.periodLabel]),
-    row(['Dibuat', input.generatedAt.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB'])
+    row(['Dibuat', input.generatedAt.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB']),
+    row(['Isi', 'Cashflow · Order · Stok'])
   );
 
   lines.push(...section('RINGKASAN', [
@@ -163,6 +164,165 @@ export function generateCashflowReportCsv(input: {
       ])
     ),
   ]));
+
+  lines.push(...section('RINGKASAN ORDER', [
+    row(['Metrik', 'Nilai']),
+    row(['Total Order', data.orders.summary.total]),
+    row(['Order Lunas', data.orders.summary.paidCount]),
+    row(['Belum Lunas', data.orders.summary.unpaidCount]),
+    row(['Total Nilai Order Lunas', data.orders.summary.totalRevenue]),
+    ...data.orders.summary.byStatus.map((s) => row([`Status: ${s.label}`, s.count])),
+  ]));
+
+  lines.push(...section('SEMUA ORDER', [
+    row([
+      'Tanggal',
+      'Cabang',
+      'No Order',
+      'Pelanggan',
+      'Telepon',
+      'Layanan',
+      'Berat (kg)',
+      'Subtotal',
+      'Diskon',
+      'Total',
+      'Status',
+      'Pembayaran',
+      'Metode Bayar',
+      'Tanggal Bayar',
+      'Dari App',
+      'ID Order',
+    ]),
+    ...data.orders.orders.map((o) =>
+      row([
+        new Date(o.createdAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }),
+        o.branchName,
+        o.orderNumber,
+        o.customerName,
+        o.customerPhone,
+        o.serviceName,
+        o.weightKg,
+        o.subtotal,
+        o.discount,
+        o.total,
+        o.statusLabel,
+        o.paymentStatusLabel,
+        o.paymentMethodLabel ?? '',
+        o.paidAt ? new Date(o.paidAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) : '',
+        o.fromApp ? 'Ya' : 'Tidak',
+        o.id,
+      ])
+    ),
+  ]));
+
+  lines.push(...section('RINGKASAN STOK', [
+    row(['Metrik', 'Nilai']),
+    row(['Jumlah Item Inventori', data.stock.summary.itemCount]),
+    row(['Item Stok Menipis', data.stock.summary.lowStockCount]),
+    row(['Pergerakan Stok (periode)', data.stock.summary.movementCount]),
+    row(['Stock Opname (periode)', data.stock.summary.opnameCount]),
+  ]));
+
+  lines.push(...section('SNAPSHOT INVENTORI', [
+    row([
+      'Cabang',
+      'SKU',
+      'Nama Item',
+      'Kategori',
+      'Satuan',
+      'Stok',
+      'Min Stok',
+      'Harga Satuan',
+      'Nilai Stok',
+      'Status',
+      'Terakhir Dihitung',
+      'ID Item',
+    ]),
+    ...data.stock.inventory.map((i) =>
+      row([
+        i.branchName,
+        i.sku ?? '',
+        i.name,
+        i.category,
+        i.unit,
+        i.currentStock,
+        i.minStock,
+        i.unitCost,
+        i.stockValue,
+        i.isLow ? 'MENIPIS' : 'OK',
+        i.lastCountedAt
+          ? new Date(i.lastCountedAt).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' })
+          : '',
+        i.id,
+      ])
+    ),
+  ]));
+
+  lines.push(...section('PERGERAKAN STOK', [
+    row(['Tanggal', 'Cabang', 'Item', 'SKU', 'Satuan', 'Tipe', 'Qty', 'Referensi', 'ID']),
+    ...data.stock.movements.map((m) =>
+      row([
+        new Date(m.createdAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }),
+        m.branchName,
+        m.itemName,
+        m.sku ?? '',
+        m.unit,
+        m.type,
+        m.qty,
+        m.reference ?? '',
+        m.id,
+      ])
+    ),
+  ]));
+
+  lines.push(...section('STOCK OPNAME', [
+    row([
+      'Cabang',
+      'Periode',
+      'Status',
+      'Dibuat',
+      'Disetujui',
+      'Kas Ekspektasi',
+      'Kas Aktual',
+      'Selisih Kas',
+      'Jumlah Baris',
+      'Total Selisih Qty',
+      'Total Selisih Nilai',
+      'Catatan',
+      'ID',
+    ]),
+    ...data.stock.opnames.map((o) =>
+      row([
+        o.branchName,
+        new Date(o.period).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' }),
+        o.status,
+        new Date(o.createdAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }),
+        o.approvedAt
+          ? new Date(o.approvedAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })
+          : '',
+        o.cashExpected ?? '',
+        o.cashActual ?? '',
+        o.cashVariance ?? '',
+        o.lineCount,
+        o.totalVarianceQty,
+        o.totalVarianceCost,
+        o.notes ?? '',
+        o.id,
+      ])
+    ),
+  ]));
+
+  for (const o of data.stock.opnames) {
+    if (o.lines.length === 0) continue;
+    lines.push(
+      ...section(`DETAIL OPNAME — ${o.branchName} (${o.status})`, [
+        row(['Item', 'Satuan', 'Stok Sistem', 'Stok Fisik', 'Selisih', 'Selisih Nilai']),
+        ...o.lines.map((l) =>
+          row([l.itemName, l.unit, l.systemQty, l.physicalQty, l.variance, l.varianceCost])
+        ),
+      ])
+    );
+  }
 
   const csv = '\uFEFF' + lines.join('\n');
   return Buffer.from(csv, 'utf8');

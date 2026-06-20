@@ -1,10 +1,10 @@
 import { prisma } from '@aww/database';
-import { fetchCashflowOverview } from '@/lib/cashflow-analytics';
 import { generateCashflowReportCsv } from '@/lib/cashflow-report-csv';
 import { buildCashflowReportEmailHtml } from '@/lib/cashflow-report-email-html';
 import { generateCashflowReportPdf } from '@/lib/cashflow-report-pdf';
 import { sendCashflowReportEmail } from '@/lib/brevo';
 import { getOwnerRecipients } from '@/lib/owner-recipients';
+import { fetchFullOperationalReport } from '@/lib/operational-report-data';
 import {
   type CashflowReportKind,
   REPORT_KIND_LABELS,
@@ -30,7 +30,7 @@ export async function sendCashflowReportForOrg(
   }
 
   const { start, end, label, filenameSuffix } = reportDateRange(kind, asOf);
-  const data = await fetchCashflowOverview({
+  const data = await fetchFullOperationalReport({
     organizationId,
     dateRange: { start, end },
     fullExport: true,
@@ -51,8 +51,8 @@ export async function sendCashflowReportForOrg(
     data,
   });
 
-  const pdfFilename = `cashflow-${filenameSuffix}.pdf`;
-  const csvFilename = `cashflow-${filenameSuffix}.csv`;
+  const pdfFilename = `laporan-${filenameSuffix}.pdf`;
+  const csvFilename = `laporan-${filenameSuffix}.csv`;
   const reportTitle = REPORT_KIND_LABELS[kind];
   let sent = 0;
   const errors: string[] = [];

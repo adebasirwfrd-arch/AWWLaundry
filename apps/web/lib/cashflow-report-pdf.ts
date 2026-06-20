@@ -1,10 +1,10 @@
 import { jsPDF } from 'jspdf';
 import { formatCurrency, formatWeight, PAYMENT_METHOD_LABELS } from '@aww/shared';
-import type { fetchCashflowOverview } from '@/lib/cashflow-analytics';
+import type { OperationalReportData } from '@/lib/operational-report-data';
 import type { CashflowReportKind } from '@/lib/report-periods';
 import { REPORT_KIND_LABELS } from '@/lib/report-periods';
 
-type CashflowData = Awaited<ReturnType<typeof fetchCashflowOverview>>;
+type ReportData = OperationalReportData;
 
 const NAVY: [number, number, number] = [30, 58, 110];
 const GREEN: [number, number, number] = [34, 197, 94];
@@ -22,7 +22,7 @@ export function generateCashflowReportPdf(input: {
   periodLabel: string;
   organizationName: string;
   generatedAt: Date;
-  data: CashflowData;
+  data: ReportData;
 }): Buffer {
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   let y = MARGIN;
@@ -39,9 +39,9 @@ export function generateCashflowReportPdf(input: {
   pdf.rect(0, 0, PAGE_W, 32, 'F');
   pdf.setTextColor(255, 255, 255);
   pdf.setFontSize(16);
-  pdf.text('AWW Laundry — Cashflow Report', MARGIN, 14);
+  pdf.text('AWW Laundry — Laporan Operasional', MARGIN, 14);
   pdf.setFontSize(10);
-  pdf.text(REPORT_KIND_LABELS[input.kind], MARGIN, 22);
+  pdf.text(`${REPORT_KIND_LABELS[input.kind]} · Cashflow · Order · Stok`, MARGIN, 22);
   pdf.text(input.periodLabel, MARGIN, 28);
   pdf.setTextColor(...NAVY);
   y = 40;
@@ -220,6 +220,103 @@ export function generateCashflowReportPdf(input: {
     p.orderNumber,
     formatCurrency(p.amount),
   ]));
+
+  // ── Order ──
+  addPageIfNeeded(20);
+  pdf.setFontSize(11);
+  pdf.setTextColor(...NAVY);
+  pdf.text('Ringkasan Order', MARGIN, y);
+  y += 6;
+  pdf.setFontSize(8);
+  pdf.setTextColor(...MUTED);
+  const os = input.data.orders.summary;
+  pdf.text(
+    `Total ${os.total} order · Lunas ${os.paidCount} · Belum lunas ${os.unpaidCount} · Nilai lunas ${formatCurrency(os.totalRevenue)}`,
+    MARGIN,
+    y
+  );
+  y += 8;
+
+  y = drawTable(
+    pdf,
+    y,
+    'Order per Status',
+    ['Status', 'Jumlah'],
+    os.byStatus.map((s) => [s.label, String(s.count)])
+  );
+
+  y = drawTable(
+    pdf,
+    y,
+    `Semua Order (${input.data.orders.orders.length})`,
+    ['Tanggal', 'Cabang', 'Order', 'Pelanggan', 'Total', 'Status'],
+    input.data.orders.orders.slice(0, 25).map((o) => [
+      new Date(o.createdAt).toLocaleDateString('id-ID'),
+      trunc(o.branchName, 10),
+      o.orderNumber,
+      trunc(o.customerName, 12),
+      formatCurrency(o.total),
+      trunc(o.statusLabel, 10),
+    ])
+  );
+
+  // ── Stok ──
+  addPageIfNeeded(20);
+  pdf.setFontSize(11);
+  pdf.setTextColor(...NAVY);
+  pdf.text('Ringkasan Stok', MARGIN, y);
+  y += 6;
+  pdf.setFontSize(8);
+  pdf.setTextColor(...MUTED);
+  const ss = input.data.stock.summary;
+  pdf.text(
+    `${ss.itemCount} item · ${ss.lowStockCount} menipis · ${ss.movementCount} pergerakan · ${ss.opnameCount} opname`,
+    MARGIN,
+    y
+  );
+  y += 8;
+
+  y = drawTable(
+    pdf,
+    y,
+    'Inventori (snapshot)',
+    ['Cabang', 'Item', 'Stok', 'Min', 'Status'],
+    input.data.stock.inventory.slice(0, 20).map((i) => [
+      trunc(i.branchName, 10),
+      trunc(i.name, 16),
+      `${i.currentStock} ${i.unit}`,
+      String(i.minStock),
+      i.isLow ? 'MENIPIS' : 'OK',
+    ])
+  );
+
+  y = drawTable(
+    pdf,
+    y,
+    `Pergerakan Stok (${input.data.stock.movements.length})`,
+    ['Tanggal', 'Cabang', 'Item', 'Tipe', 'Qty'],
+    input.data.stock.movements.slice(0, 15).map((m) => [
+      new Date(m.createdAt).toLocaleDateString('id-ID'),
+      trunc(m.branchName, 10),
+      trunc(m.itemName, 14),
+      m.type,
+      String(m.qty),
+    ])
+  );
+
+  y = drawTable(
+    pdf,
+    y,
+    `Stock Opname (${input.data.stock.opnames.length})`,
+    ['Cabang', 'Status', 'Baris', 'Selisih Nilai', 'Selisih Kas'],
+    input.data.stock.opnames.slice(0, 10).map((o) => [
+      trunc(o.branchName, 12),
+      o.status,
+      String(o.lineCount),
+      formatCurrency(o.totalVarianceCost),
+      o.cashVariance != null ? formatCurrency(o.cashVariance) : '—',
+    ])
+  );
 
   // Footer last page
   pdf.setFontSize(7);
