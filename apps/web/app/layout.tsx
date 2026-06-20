@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   },
 };
 
-const themeInitScript = `(function(){try{var p=localStorage.getItem('aww-theme')||'system';var d=p==='dark'||(p==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);var r=document.documentElement;r.classList.toggle('dark',d);r.setAttribute('data-theme',d?'dark':'light');r.style.colorScheme=d?'dark':'light';}catch(e){}})();`;
+const themeInitScript = `(function(){try{var r=document.documentElement;var ua=navigator.userAgent||'';if(ua.indexOf('AWWLaundry/')!==-1||new URLSearchParams(location.search).get('native')==='1'){r.classList.add('native-app');r.setAttribute('data-native-app','awwlaundry');try{sessionStorage.setItem('aww-native-app','1');}catch(e){}}else{try{if(sessionStorage.getItem('aww-native-app')==='1'){r.classList.add('native-app');r.setAttribute('data-native-app','awwlaundry');}}catch(e){}}var p=localStorage.getItem('aww-theme')||'system';var d=p==='dark'||(p==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);r.classList.toggle('dark',d);r.setAttribute('data-theme',d?'dark':'light');r.style.colorScheme=d?'dark':'light';}catch(e){}})();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

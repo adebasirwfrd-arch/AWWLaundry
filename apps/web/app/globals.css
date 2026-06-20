@@ -65,6 +65,11 @@
     overscroll-behavior-y: none;
     -webkit-tap-highlight-color: transparent;
   }
+
+  /* Splash web tidak boleh menutupi dashboard di APK */
+  html.native-app [data-aww-splash] {
+    display: none !important;
+  }
 }
 
 /* ── Dark mode surface overrides ──

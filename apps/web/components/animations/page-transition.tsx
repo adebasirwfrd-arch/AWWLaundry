@@ -16,6 +16,9 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const overlayRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const [nativeApp] = useState(() =>
+    typeof window !== 'undefined' ? isMobileAppWebView() : false
+  );
   const [reduced, setReduced] = useState(false);
 
   useEffect(() => {
@@ -23,8 +26,7 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // Di app native, lewati animasi fade supaya konten dijamin terlihat (tidak stuck transparan).
-    if (reduced || isMobileAppWebView()) return;
+    if (nativeApp || reduced) return;
     const overlay = overlayRef.current;
     const content = contentRef.current;
     if (!overlay || !content) return;
@@ -75,7 +77,12 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
     });
 
     return () => ctx.revert();
-  }, [pathname, reduced]);
+  }, [pathname, reduced, nativeApp]);
+
+  // Tanpa GSAP di native — cegah konten tertinggal opacity 0 setelah navigasi/login.
+  if (nativeApp || reduced) {
+    return <>{children}</>;
+  }
 
   return (
     <>

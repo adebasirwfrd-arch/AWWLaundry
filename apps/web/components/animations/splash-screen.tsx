@@ -11,20 +11,23 @@ import { isMobileAppWebView } from '@/lib/mobile-webview';
  * Auto-dismisses after the intro timeline completes.
  */
 export function SplashScreen() {
+  // Deteksi native sejak render pertama — hindari race setelah redirect login/OAuth.
+  const [nativeApp] = useState(() =>
+    typeof window !== 'undefined' ? isMobileAppWebView() : false
+  );
   const [visible, setVisible] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (nativeApp) return;
     if (typeof window === 'undefined') return;
-    // Native app sudah punya splash screen sendiri (Expo) — jangan tampilkan overlay web.
-    if (isMobileAppWebView()) return;
     const path = window.location.pathname;
     if (path.startsWith('/login') || path.startsWith('/register') || path.startsWith('/forgot-password') || path.startsWith('/reset-password')) return;
     const seen = sessionStorage.getItem('aww-splash-seen');
     if (seen) return;
     setVisible(true);
     sessionStorage.setItem('aww-splash-seen', '1');
-  }, []);
+  }, [nativeApp]);
 
   // Safety net: apa pun yang terjadi dengan animasi, splash wajib hilang.
   useEffect(() => {
@@ -55,11 +58,12 @@ export function SplashScreen() {
     return () => ctx.revert();
   }, [visible]);
 
-  if (!visible) return null;
+  if (nativeApp || !visible) return null;
 
   return (
     <div
       ref={ref}
+      data-aww-splash
       className="fixed inset-0 z-[10000] flex flex-col items-center justify-center overflow-hidden bg-aww-brand-hero"
     >
       <RainbowBubbleField density="high" />
