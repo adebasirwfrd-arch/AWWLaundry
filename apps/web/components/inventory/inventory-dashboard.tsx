@@ -130,6 +130,24 @@ function buildInventoryUrl(basePath: string, branchId: string, tab?: Tab, step?:
   return qs ? `${basePath}?${qs}` : basePath;
 }
 
+function isHistoryOpname(opname: { status: string; notes: string | null }) {
+  if (opname.status === 'APPROVED' || opname.status === 'REJECTED') return true;
+  // Legacy: reject sebelumnya pakai status CANCELLED + catatan Ditolak
+  if (opname.status === 'CANCELLED' && opname.notes?.includes('Ditolak')) return true;
+  return false;
+}
+
+function historyStatusLabel(opname: { status: string; notes: string | null }) {
+  if (opname.status === 'CANCELLED' && opname.notes?.includes('Ditolak')) return 'REJECTED';
+  return opname.status;
+}
+
+function historyStatusStyle(status: string) {
+  if (status === 'APPROVED') return 'bg-rainbow-green/15 text-rainbow-green';
+  if (status === 'REJECTED') return 'bg-red-100 text-red-600';
+  return 'bg-brand-navy/10 text-brand-navy';
+}
+
 export function InventoryDashboard({
   branches,
   initialBranchId,
@@ -414,12 +432,10 @@ export function InventoryDashboard({
     setCashLoading(true);
     startTransition(async () => {
       try {
-        const cashExpected = parseQty(cashForm.expected);
         const cashActual = parseQty(cashForm.actual);
         const updated = await updateOpnameCash({
           branchId,
           opnameId: activeOpname.id,
-          cashExpected,
           cashActual,
           notes: cashForm.notes || undefined,
         });
@@ -806,14 +822,17 @@ export function InventoryDashboard({
                   <CardHeader><CardTitle>Rekonsiliasi Kas Fisik</CardTitle></CardHeader>
                   <CardContent className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5">
-                      <Input
-                        label="Kas Seharusnya (Rp)"
-                        type="number"
-                        value={cashForm.expected}
-                        onChange={(e) => setCashForm({ ...cashForm, expected: e.target.value })}
-                      />
+                      <label className="block text-sm font-medium text-brand-navy">
+                        Kas Seharusnya (Rp)
+                      </label>
+                      <div className="flex h-11 items-center rounded-aww-md border border-brand-navy/10 bg-brand-navy/5 px-4 font-semibold text-brand-navy">
+                        {cashForm.expected.trim()
+                          ? formatCurrency(cashExpectedAmount)
+                          : '—'}
+                      </div>
                       <p className="text-xs text-brand-navy/50">
-                        Otomatis dari sistem: saldo opname terakhir + pembayaran tunai − pengeluaran tunai.
+                        Nilai tetap dari sistem (kas opname terakhir + tunai masuk − tunai keluar).
+                        Setelah owner approve, opname berikutnya memakai <strong>kas aktual</strong> sebagai dasar.
                       </p>
                     </div>
                     <Input label="Kas Aktual (Rp)" type="number" value={cashForm.actual} onChange={(e) => setCashForm({ ...cashForm, actual: e.target.value })} />
@@ -922,8 +941,9 @@ export function InventoryDashboard({
 
       {tab === 'history' && (
         <div className="space-y-3">
-          {opnames.filter((o) => o.status === 'APPROVED').map((o) => {
+          {opnames.filter(isHistoryOpname).map((o) => {
             const totalVariance = o.lines.reduce((s, l) => s + Math.abs(l.varianceCost ?? 0), 0);
+            const statusLabel = historyStatusLabel(o);
             return (
               <Card
                 key={o.id}
@@ -937,17 +957,20 @@ export function InventoryDashboard({
                     {o.cashVariance != null && (
                       <p className="text-sm text-brand-navy/60">Selisih kas: {formatCurrency(o.cashVariance)}</p>
                     )}
+                    {o.notes && statusLabel === 'REJECTED' && (
+                      <p className="text-sm text-red-600/80">{o.notes}</p>
+                    )}
                     <p className="mt-1 text-xs text-rainbow-cyan">Klik untuk lihat detail</p>
                   </div>
-                  <span className="rounded-full bg-rainbow-green/15 px-3 py-1 text-xs font-semibold text-rainbow-green">
-                    {o.status}
+                  <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${historyStatusStyle(statusLabel)}`}>
+                    {statusLabel}
                   </span>
                 </CardContent>
               </Card>
             );
           })}
-          {opnames.filter((o) => o.status === 'APPROVED').length === 0 && (
-            <p className="text-center text-brand-navy/50">Belum ada opname yang disetujui</p>
+          {opnames.filter(isHistoryOpname).length === 0 && (
+            <p className="text-center text-brand-navy/50">Belum ada riwayat opname (disetujui / ditolak)</p>
           )}
         </div>
       )}

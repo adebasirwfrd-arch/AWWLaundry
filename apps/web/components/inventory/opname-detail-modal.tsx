@@ -107,9 +107,14 @@ export function OpnameDetailModal({
       ? 'bg-rainbow-green/15 text-rainbow-green'
       : opname.status === 'PENDING_APPROVAL'
         ? 'bg-amber-100 text-amber-700'
-        : opname.status === 'CANCELLED'
+        : opname.status === 'REJECTED' || (opname.status === 'CANCELLED' && opname.notes?.includes('Ditolak'))
           ? 'bg-red-100 text-red-600'
-          : 'bg-brand-sky/20 text-brand-navy';
+          : opname.status === 'CANCELLED'
+            ? 'bg-red-100 text-red-600'
+            : 'bg-brand-sky/20 text-brand-navy';
+
+  const statusLabel =
+    opname.status === 'CANCELLED' && opname.notes?.includes('Ditolak') ? 'REJECTED' : opname.status;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-navy/40 p-4 backdrop-blur-sm">
@@ -128,7 +133,7 @@ export function OpnameDetailModal({
               </p>
             </div>
             <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusColor}`}>
-              {opname.status}
+              {statusLabel}
             </span>
           </div>
         </div>

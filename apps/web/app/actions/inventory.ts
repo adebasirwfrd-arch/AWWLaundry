@@ -339,7 +339,6 @@ export async function completeOpnameCountStep(opnameId: string, branchId?: strin
 /** Step 3: Rekonsiliasi kas. */
 export async function updateOpnameCash(input: {
   opnameId: string;
-  cashExpected: number;
   cashActual: number;
   notes?: string;
   branchId?: string;
@@ -357,7 +356,11 @@ export async function updateOpnameCash(input: {
     throw new Error('Kas aktual wajib diisi');
   }
 
-  const cashVariance = input.cashActual - input.cashExpected;
+  // Kas seharusnya ditetapkan sistem — tidak bisa diedit user.
+  // Snapshot sekali per sesi; opname berikutnya memakai kas aktual setelah owner approve.
+  const cashExpected =
+    opname.cashExpected ?? (await computeExpectedBranchCash(branchId));
+  const cashVariance = input.cashActual - cashExpected;
   const hasStockVariance = opname.lines.some((line) => line.variance !== 0);
   if ((cashVariance !== 0 || hasStockVariance) && !input.notes?.trim()) {
     throw new Error('Ada selisih stok atau kas — wajib isi catatan penjelasan');
@@ -608,7 +611,7 @@ export async function rejectStockOpname(opnameId: string, reason?: string, branc
 
   await prisma.stockOpname.update({
     where: { id: opnameId },
-    data: { status: 'CANCELLED', notes: reason ? `Ditolak: ${reason}` : 'Ditolak owner' },
+    data: { status: 'REJECTED', notes: reason ? `Ditolak: ${reason}` : 'Ditolak owner' },
   });
 
   await dismissOpnameNotifications(opnameId);

@@ -238,12 +238,14 @@ export function CashflowPageClient({
 
   return (
     <div className="space-y-6">
-      {/* Summary cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+      {/* Summary cards — 2 baris agar tidak overflow */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard icon={ArrowUpCircle} label="Pemasukan" value={summary.totalIncome} color="text-rainbow-green" />
         <SummaryCard icon={ArrowDownCircle} label="Pengeluaran" value={summary.totalExpense} color="text-red-500" />
         <SummaryCard icon={Wallet} label="Net Cashflow" value={summary.netCashflow} color={summary.netCashflow >= 0 ? 'text-rainbow-cyan' : 'text-red-500'} />
         <SummaryCard icon={Wallet} label="Nilai Kas" value={summary.expectedCash} color="text-brand-navy" subtitle="Saldo tunai sistem" />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard
           icon={Scale}
           label="Rekonsiliasi Aktual"
@@ -495,16 +497,16 @@ function SummaryCard({
   muted?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-brand-navy/10 bg-white p-4 shadow-aww-sm">
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-xs text-brand-navy/50">{label}</p>
-          <p className={`font-display text-lg font-bold leading-tight sm:text-xl ${color}`}>
+    <div className="rounded-2xl border border-brand-navy/10 bg-white p-4 shadow-aww-sm overflow-hidden">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs text-brand-navy/50">{label}</p>
+          <p className={`font-display text-base font-bold leading-tight sm:text-lg ${color} break-words`}>
             {muted ? '—' : formatCurrency(value)}
           </p>
-          {subtitle && <p className="mt-0.5 truncate text-[11px] text-brand-navy/45">{subtitle}</p>}
+          {subtitle && <p className="mt-0.5 line-clamp-2 text-[11px] text-brand-navy/45">{subtitle}</p>}
         </div>
-        <Icon className={`h-8 w-8 shrink-0 ${color} opacity-70`} />
+        <Icon className={`h-7 w-7 shrink-0 ${color} opacity-70`} />
       </div>
     </div>
   );
