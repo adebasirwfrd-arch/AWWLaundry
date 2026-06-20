@@ -166,9 +166,23 @@ export function InventoryDashboard({
   const urlTab = (searchParams.get('tab') as Tab | null) ?? defaultTab;
   const urlStep = searchParams.get('step');
 
-  const [tab, setTab] = useState<Tab>(
-    urlTab && ['items', 'movements', 'opname', 'history'].includes(urlTab) ? urlTab : 'items'
-  );
+  const cashierMode = userRole === 'CASHIER';
+  const allTabs: { id: Tab; label: string; icon: typeof Package }[] = [
+    { id: 'items', label: 'Master Stok', icon: Package },
+    { id: 'movements', label: 'Masuk/Keluar', icon: History },
+    { id: 'opname', label: 'Stock Opname', icon: ClipboardCheck },
+    { id: 'history', label: 'Riwayat Opname', icon: Wallet },
+  ];
+  const tabs = cashierMode
+    ? allTabs.filter((t) => t.id === 'opname' || t.id === 'history')
+    : allTabs;
+  const allowedTabs = tabs.map((t) => t.id);
+
+  const [tab, setTab] = useState<Tab>(() => {
+    if (urlTab && allowedTabs.includes(urlTab)) return urlTab;
+    if (defaultTab && allowedTabs.includes(defaultTab)) return defaultTab;
+    return cashierMode ? 'opname' : 'items';
+  });
   const [branchId, setBranchId] = useState(initialBranchId);
   const [items, setItems] = useState(initialItems);
   const [movements, setMovements] = useState(initialMovements);
@@ -263,6 +277,12 @@ export function InventoryDashboard({
       notes: initialSummary.unfinishedOpname?.notes ?? '',
     });
     setLineEdits({});
+    setTab((current) => {
+      if (urlTab && allowedTabs.includes(urlTab)) return urlTab;
+      if (defaultTab && allowedTabs.includes(defaultTab)) return defaultTab;
+      if (!allowedTabs.includes(current)) return cashierMode ? 'opname' : 'items';
+      return current;
+    });
   }, [
     initialBranchId,
     initialItems,
@@ -270,6 +290,10 @@ export function InventoryDashboard({
     initialOpnames,
     initialSummary,
     urlStep,
+    urlTab,
+    defaultTab,
+    allowedTabs,
+    cashierMode,
   ]);
 
   const syncUrl = useCallback(
@@ -519,13 +543,6 @@ export function InventoryDashboard({
     });
   }
 
-  const tabs: { id: Tab; label: string; icon: typeof Package }[] = [
-    { id: 'items', label: 'Master Stok', icon: Package },
-    { id: 'movements', label: 'Masuk/Keluar', icon: History },
-    { id: 'opname', label: 'Stock Opname', icon: ClipboardCheck },
-    { id: 'history', label: 'Riwayat Opname', icon: Wallet },
-  ];
-
   return (
     <div className="space-y-6">
       {lockBranch && branchLabel ? (
@@ -628,9 +645,9 @@ export function InventoryDashboard({
         <SummaryCard
           title="Cashflow Cabang"
           value={formatCurrency(summary.expectedCash)}
-          subtitle={isOwner || isManager ? 'Lihat detail di Cashflow' : 'Nilai kas periode berjalan'}
+          subtitle={isOwner || isManager || isCashier ? 'Lihat detail di Cashflow' : 'Nilai kas periode berjalan'}
           icon={Landmark}
-          href={isOwner || isManager ? '/owner/cashflow' : undefined}
+          href={isOwner || isManager ? '/owner/cashflow' : isCashier ? '/cashier/cashflow' : undefined}
         />
       </div>
 

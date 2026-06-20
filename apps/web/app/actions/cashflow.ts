@@ -12,16 +12,18 @@ import type { DashboardPeriod } from '@/lib/date-buckets';
 import { defaultCategories } from '@/lib/expense-defaults';
 import { processCapexDueReminders } from '@/lib/capex-due-reminders';
 
-const VIEW_ROLES = [Role.OWNER, Role.SUPER_ADMIN, Role.MANAGER];
+const VIEW_ROLES = [Role.OWNER, Role.SUPER_ADMIN, Role.MANAGER, Role.CASHIER];
 
 async function ctx() {
   const session = await requireAuth(VIEW_ROLES);
+  const branchLocked =
+    session.user.role === Role.MANAGER || session.user.role === Role.CASHIER;
   return {
     organizationId: session.user.organizationId,
     branchId: session.user.branchId,
     userId: session.user.id,
     role: session.user.role,
-    managerBranchId: session.user.role === Role.MANAGER ? session.user.branchId : undefined,
+    managerBranchId: branchLocked ? session.user.branchId : undefined,
   };
 }
 
@@ -124,6 +126,7 @@ export async function createExpense(input: {
   );
 
   revalidatePath('/owner/cashflow');
+  revalidatePath('/cashier/cashflow');
 
   const creator = await prisma.user.findUnique({
     where: { id: c.userId },
@@ -218,5 +221,6 @@ export async function deleteExpense(expenseId: string) {
   );
 
   revalidatePath('/owner/cashflow');
+  revalidatePath('/cashier/cashflow');
   return { ok: true };
 }

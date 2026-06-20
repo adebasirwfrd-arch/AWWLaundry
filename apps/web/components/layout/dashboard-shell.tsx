@@ -39,6 +39,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/owner', label: 'Dashboard', icon: LayoutDashboard, roles: [Role.OWNER, Role.SUPER_ADMIN] },
   { href: '/owner/orders', label: 'Order', icon: ClipboardList, roles: [Role.OWNER, Role.SUPER_ADMIN, Role.MANAGER] },
   { href: '/owner/cashflow', label: 'Cashflow', icon: Landmark, roles: [Role.OWNER, Role.SUPER_ADMIN, Role.MANAGER] },
+  { href: '/cashier/cashflow', label: 'Cashflow', icon: Landmark, roles: [Role.CASHIER] },
   { href: '/manager', label: 'Dashboard', icon: LayoutDashboard, roles: [Role.MANAGER] },
   { href: '/cashier', label: 'POS Kasir', icon: ShoppingCart, roles: [Role.CASHIER, Role.MANAGER, Role.OWNER] },
   { href: '/worker', label: 'Produksi', icon: Wrench, roles: [Role.WORKER, Role.MANAGER] },

@@ -6,7 +6,6 @@ import { InventoryDashboard } from '@/components/inventory/inventory-dashboard';
 import {
   getInventorySummary,
   listInventoryItems,
-  listStockMovements,
   listStockOpnames,
 } from '@/app/actions/inventory';
 
@@ -21,7 +20,7 @@ export default async function CashierInventoryPage({
 
   const [items, movements, opnames, summary] = await Promise.all([
     listInventoryItems(branchId),
-    listStockMovements(branchId),
+    Promise.resolve([]),
     listStockOpnames(branchId),
     getInventorySummary(branchId),
   ]);
@@ -49,7 +48,8 @@ export default async function CashierInventoryPage({
           opnames={opnames}
           summary={summary}
           userRole={session.user.role}
-          defaultTab={params.tab as 'items' | 'movements' | 'opname' | 'history' | undefined}
+          defaultTab={(params.tab as 'opname' | 'history' | undefined) ?? 'opname'}
+          basePath="/cashier/inventory"
         />
       </Suspense>
     </DashboardShell>
