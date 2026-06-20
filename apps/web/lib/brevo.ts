@@ -47,6 +47,20 @@ export async function sendEmail(input: SendEmailInput): Promise<{ ok: boolean; s
   return { ok: true };
 }
 
+export async function sendDevErrorEmail(input: {
+  to: string;
+  subject: string;
+  htmlContent: string;
+  textContent?: string;
+}) {
+  return sendEmail({
+    to: { email: input.to, name: 'AWW Dev Team' },
+    subject: input.subject,
+    htmlContent: input.htmlContent,
+    textContent: input.textContent,
+  });
+}
+
 export async function sendWelcomeEmail(email: string, name: string) {
   const appUrl = getAppUrl();
   return sendEmail({

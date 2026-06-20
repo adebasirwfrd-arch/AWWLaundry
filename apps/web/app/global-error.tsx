@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { AlertTriangle, RotateCcw } from 'lucide-react';
+import { reportClientError } from '@/lib/report-client-error';
 import '@aww/design-tokens/css-variables.css';
 import './globals.css';
 
@@ -14,6 +15,11 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     console.error('[GlobalError]', error);
+    reportClientError({
+      error,
+      component: 'app/global-error.tsx',
+      boundary: 'global-error',
+    });
   }, [error]);
 
   return (

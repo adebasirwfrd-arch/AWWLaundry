@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test:cashflow-report": "tsx --import ./scripts/load-test-env.ts scripts/test-cashflow-report.ts"
+    "test:cashflow-report": "tsx --import ./scripts/load-test-env.ts scripts/test-cashflow-report.ts",
+    "test:dev-log": "tsx --import ./scripts/load-test-env.ts scripts/test-dev-log.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.4",

@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { AlertTriangle, RotateCcw } from 'lucide-react';
+import { reportClientError } from '@/lib/report-client-error';
 
 export default function Error({
   error,
@@ -12,6 +13,11 @@ export default function Error({
 }) {
   useEffect(() => {
     console.error('[Error]', error);
+    reportClientError({
+      error,
+      component: 'app/error.tsx',
+      boundary: 'error',
+    });
   }, [error]);
 
   return (
