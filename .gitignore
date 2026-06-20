@@ -9,6 +9,7 @@ node_modules/
 .env.development.local
 .env.test.local
 .env.production.local
+scripts/vercel-env-production.env
 !.env.example
 
 # Next.js / Expo
@@ -39,3 +40,4 @@ apps/web/tmp/
 # IDE
 .idea/
 .vscode/
+.vercel

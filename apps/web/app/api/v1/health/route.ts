@@ -42,10 +42,11 @@ export async function GET() {
   if (isSupabaseStorageConfigured()) {
     const storageCheck = await verifySupabaseStorage();
     checks.storage = storageCheck;
-  } else if (process.env.S3_ACCESS_KEY_ID && !process.env.S3_ACCESS_KEY_ID.includes('DUMMY')) {
-    checks.storage = { ok: true, note: 'R2/S3 configured' };
   } else {
-    checks.storage = { ok: false, note: 'Supabase Storage atau R2 belum dikonfigurasi — upload lokal (dev only)' };
+    checks.storage = {
+      ok: false,
+      note: 'Supabase Storage wajib — set NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_STORAGE_BUCKET',
+    };
   }
 
   const phase1 = checks.database.ok && checks.authSecret.ok;

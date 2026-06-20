@@ -7,7 +7,7 @@ export function createAppQueryClient() {
         staleTime: 30_000,
         gcTime: 5 * 60_000,
         retry: 2,
-        refetchOnWindowFocus: true,
+        refetchOnWindowFocus: false,
         refetchOnReconnect: true,
       },
       mutations: {

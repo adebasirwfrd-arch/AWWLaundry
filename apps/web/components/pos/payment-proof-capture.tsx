@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import Image from 'next/image';
 import { Camera, Upload, X, ImageIcon, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { uploadFileInChunks } from '@/lib/chunked-upload-client';
+import { uploadExpenseProof, uploadPaymentProof } from '@/app/actions/payment-proof';
 import type { UploadCategory } from '@/lib/chunked-upload-shared';
 
 interface PaymentProofCaptureProps {
@@ -29,7 +29,6 @@ export function PaymentProofCapture({
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
 
   async function handleFile(file: File | null) {
     setError(null);
@@ -45,10 +44,12 @@ export function PaymentProofCapture({
     const preview = URL.createObjectURL(file);
     onProofChange(null, preview);
     setUploading(true);
-    setProgress(0);
 
     try {
-      const url = await uploadFileInChunks(file, category, setProgress);
+      const formData = new FormData();
+      formData.append('file', file);
+      const uploadFn = category === 'expense-proof' ? uploadExpenseProof : uploadPaymentProof;
+      const url = await uploadFn(formData);
       onProofChange(url, preview);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload gagal');
@@ -61,7 +62,6 @@ export function PaymentProofCapture({
 
   function clear() {
     onProofChange(null, null);
-    setProgress(0);
     setError(null);
     if (inputRef.current) inputRef.current.value = '';
   }
@@ -99,7 +99,7 @@ export function PaymentProofCapture({
           {uploading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center rounded-xl bg-black/45 text-white">
               <Loader2 className="h-6 w-6 animate-spin" />
-              <p className="mt-2 text-xs font-medium">Upload batch… {progress}%</p>
+              <p className="mt-2 text-xs font-medium">Mengunggah ke Supabase…</p>
             </div>
           )}
           {ready && (

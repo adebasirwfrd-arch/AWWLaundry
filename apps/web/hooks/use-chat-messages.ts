@@ -1,9 +1,11 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { toast } from '@/lib/toast';
 import { sendMessage, uploadAttachment } from '@/app/actions/chat';
+import { getSupabaseBrowser, isSupabaseBrowserConfigured } from '@/lib/supabase-browser';
 
 export interface ChatMessage {
   id: string;
@@ -23,13 +25,73 @@ async function fetchMessages(conversationId: string) {
   return res.json() as Promise<{ messages: ChatMessage[]; currentUserId: string }>;
 }
 
+function mapRealtimeMessage(row: Record<string, unknown>): ChatMessage {
+  return {
+    id: String(row.id),
+    senderId: row.senderId ? String(row.senderId) : null,
+    senderName: String(row.senderName ?? 'Pengguna'),
+    senderRole: String(row.senderRole ?? 'CUSTOMER'),
+    body: String(row.body ?? ''),
+    attachmentUrl: row.attachmentUrl ? String(row.attachmentUrl) : null,
+    attachmentType: row.attachmentType ? String(row.attachmentType) : null,
+    attachmentName: row.attachmentName ? String(row.attachmentName) : null,
+    createdAt:
+      typeof row.createdAt === 'string'
+        ? row.createdAt
+        : row.createdAt instanceof Date
+          ? row.createdAt.toISOString()
+          : new Date().toISOString(),
+  };
+}
+
 export function useChatMessages(conversationId: string) {
-  return useQuery({
+  const queryClient = useQueryClient();
+  const realtimeEnabled = isSupabaseBrowserConfigured();
+
+  const query = useQuery({
     queryKey: queryKeys.chat.messages(conversationId),
     queryFn: () => fetchMessages(conversationId),
-    refetchInterval: 4_000,
     enabled: !!conversationId,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    // Fallback polling jika Supabase Realtime belum diaktifkan
+    refetchInterval: realtimeEnabled ? false : 8_000,
   });
+
+  useEffect(() => {
+    if (!conversationId || !realtimeEnabled) return;
+
+    const supabase = getSupabaseBrowser();
+    const channel = supabase
+      .channel(`messages:${conversationId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'Message',
+          filter: `conversationId=eq.${conversationId}`,
+        },
+        (payload) => {
+          const incoming = mapRealtimeMessage(payload.new as Record<string, unknown>);
+          queryClient.setQueryData<{ messages: ChatMessage[]; currentUserId: string }>(
+            queryKeys.chat.messages(conversationId),
+            (prev) => {
+              if (!prev) return prev;
+              if (prev.messages.some((m) => m.id === incoming.id)) return prev;
+              return { ...prev, messages: [...prev.messages, incoming] };
+            }
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [conversationId, queryClient, realtimeEnabled]);
+
+  return query;
 }
 
 export function useSendChatMessage(conversationId: string) {

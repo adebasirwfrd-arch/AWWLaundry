@@ -8,6 +8,7 @@ export const prisma =
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
   });
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+// Simpan singleton di semua environment agar koneksi Prisma tidak dibuat ulang tiap cold start Vercel.
+globalForPrisma.prisma = prisma;
 
 export * from '@prisma/client';

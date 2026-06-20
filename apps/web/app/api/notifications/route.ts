@@ -21,6 +21,7 @@ export async function GET() {
 
   return NextResponse.json({
     unreadCount,
+    userId: session.user.id,
     items: items.map((n) => ({
       id: n.id,
       type: n.type,
