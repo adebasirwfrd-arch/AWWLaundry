@@ -5,6 +5,7 @@ import { prisma, Role } from '@aww/database';
 import { formatCurrency } from '@aww/shared';
 import { requireAuth } from '@/lib/session';
 import { createNotification, notifyBranchRoles } from '@/lib/notify';
+import { notifyCustomerOrderCreated, notifyCustomerOrderStatus } from '@/lib/order-notifications';
 import { awardLoyaltyPointsForOrder, awardAppOrderBonus, refundRedeemedPoints } from '@/lib/loyalty';
 
 const STAFF = [Role.CASHIER, Role.MANAGER, Role.OWNER, Role.SUPER_ADMIN];
@@ -136,6 +137,20 @@ export async function confirmOrderWithPayment(input: {
     excludeUserId: session.user.id,
   });
 
+  if (order.customer.phone) {
+    const branch = await prisma.branch.findUnique({ where: { id: order.branchId } });
+    void notifyCustomerOrderCreated({
+      phone: order.customer.phone,
+      customerName: order.customer.name,
+      orderNumber: order.orderNumber,
+      serviceName: order.serviceType.name,
+      weightKg,
+      total: finalTotal,
+      branchName: branch?.name ?? 'AWW Laundry',
+      paid: true,
+    }).catch(() => {});
+  }
+
   revalidatePath('/cashier/inbox');
   revalidatePath('/cashier');
   revalidatePath('/worker');
@@ -176,6 +191,17 @@ export async function rejectOrder(orderId: string, reason?: string) {
       body: `Maaf, pesanan ${order.orderNumber} tidak dapat diproses${reason ? `: ${reason}` : '.'}`,
       data: { orderId: order.id, orderNumber: order.orderNumber },
     });
+  }
+
+  if (order.customer.phone) {
+    const branch = await prisma.branch.findUnique({ where: { id: order.branchId } });
+    void notifyCustomerOrderStatus({
+      phone: order.customer.phone,
+      customerName: order.customer.name,
+      orderNumber: order.orderNumber,
+      newStatus: 'CANCELLED',
+      branchName: branch?.name ?? 'AWW Laundry',
+    }).catch(() => {});
   }
 
   revalidatePath('/cashier/inbox');

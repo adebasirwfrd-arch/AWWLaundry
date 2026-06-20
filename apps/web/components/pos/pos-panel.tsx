@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Scale, Printer, User, Phone, Weight, Plus, Wallet, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CelebrationBurst } from '@/components/animations/celebration-burst';
 import { WaterDropletMascot } from '@/components/brand/water-droplet-mascot';
 import { ThermalReceipt, type ReceiptData } from '@/components/pos/thermal-receipt';
+import { ScalePanel } from '@/components/pos/scale-panel';
+import { printThermalReceipt } from '@/lib/thermal-print';
 import { createOrder } from '@/app/actions/orders';
 import { PaymentProofCapture } from '@/components/pos/payment-proof-capture';
 import { usePosDraftStore } from '@/stores/pos-draft-store';
@@ -42,6 +44,7 @@ export function POSPanel({ services, branchName, branchPhone }: POSPanelProps) {
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [proofUrl, setProofUrl] = useState<string | null>(null);
   const [proofPreview, setProofPreview] = useState<string | null>(null);
+  const shouldAutoPrint = useRef(false);
 
   useEffect(() => {
     if (!serviceId && services[0]?.id) {
@@ -55,13 +58,11 @@ export function POSPanel({ services, branchName, branchPhone }: POSPanelProps) {
   const needsProof = paymentMethod === 'BANK_TRANSFER' || paymentMethod === 'QRIS';
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (Math.random() > 0.75 && !weight) {
-        setField('weight', (Math.random() * 5 + 1).toFixed(2));
-      }
-    }, 6000);
-    return () => clearInterval(interval);
-  }, [weight]);
+    if (receipt?.paid && shouldAutoPrint.current) {
+      shouldAutoPrint.current = false;
+      void printThermalReceipt();
+    }
+  }, [receipt]);
 
   async function handleSubmit(pay: boolean) {
     if (!customerName || !customerPhone || !weightNum || !serviceId) return;
@@ -85,6 +86,7 @@ export function POSPanel({ services, branchName, branchPhone }: POSPanelProps) {
         proofUrl: pay && needsProof ? proofUrl ?? undefined : undefined,
       });
 
+      shouldAutoPrint.current = pay;
       setReceipt({
         orderNumber: order.orderNumber,
         total: order.total,
@@ -136,10 +138,12 @@ export function POSPanel({ services, branchName, branchPhone }: POSPanelProps) {
             <Input id="phone" label="No. Telepon" value={customerPhone} onChange={(e) => setField('customerPhone', e.target.value)} placeholder="081234567890" />
           </div>
 
+          <ScalePanel />
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Input id="weight" label="Berat (kg)" type="number" step="0.1" min="0.1" value={weight} onChange={(e) => setField('weight', e.target.value)} placeholder="0.00" />
-              <p className="mt-1 text-xs text-brand-navy/50">Timbangan digital: auto-capture / manual</p>
+              <p className="mt-1 text-xs text-brand-navy/50">Auto dari timbangan USB atau input manual</p>
             </div>
             <Select
               id="service"

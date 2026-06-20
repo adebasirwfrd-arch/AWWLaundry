@@ -486,18 +486,23 @@ model MachineLog {
 }
 
 model InventoryItem {
-  id           String  @id @default(cuid())
-  branchId     String
-  name         String
-  unit         String
-  minStock     Float   @default(0)
-  currentStock Float   @default(0)
+  id            String    @id @default(cuid())
+  branchId      String
+  sku           String?
+  name          String
+  category      String    @default("Supplies")
+  unit          String
+  unitCost      Float     @default(0)
+  minStock      Float     @default(0)
+  currentStock  Float     @default(0)
+  lastCountedAt DateTime?
 
   branch      Branch            @relation(fields: [branchId], references: [id])
   movements   StockMovement[]
   opnameLines StockOpnameLine[]
 
   @@index([branchId])
+  @@index([branchId, sku])
 }
 
 model StockMovement {
@@ -513,15 +518,18 @@ model StockMovement {
 }
 
 model StockOpname {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   branchId     String
   period       DateTime
-  status       String   @default("DRAFT")
+  status       String    @default("DRAFT")
+  notes        String?
   cashExpected Float?
   cashActual   Float?
   cashVariance Float?
+  createdById  String?
   approvedById String?
-  createdAt    DateTime @default(now())
+  approvedAt   DateTime?
+  createdAt    DateTime  @default(now())
 
   branch Branch            @relation(fields: [branchId], references: [id])
   lines  StockOpnameLine[]

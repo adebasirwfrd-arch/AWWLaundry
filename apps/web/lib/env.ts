@@ -41,3 +41,10 @@ export function getBrevoConfig() {
     senderName: process.env.BREVO_SENDER_NAME ?? 'AWW Laundry',
   };
 }
+
+export function isWhatsAppConfigured() {
+  return !!(
+    (process.env.FONNTE_API_KEY && !process.env.FONNTE_API_KEY.startsWith('your_')) ||
+    (process.env.WABLAS_API_KEY && !process.env.WABLAS_API_KEY.startsWith('your_'))
+  );
+}

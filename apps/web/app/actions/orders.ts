@@ -3,6 +3,7 @@
 import { prisma } from '@aww/database';
 import { requireAuth } from '@/lib/session';
 import { createAuditLog, getBranchPrice, updateDailySummary } from '@/lib/audit';
+import { notifyCustomerOrderCreated, notifyCustomerOrderStatus } from '@/lib/order-notifications';
 import { ORDER_STATUS_FLOW, PRODUCTION_GATE_MESSAGE, generateOrderNumber } from '@aww/shared';
 import { revalidatePath } from 'next/cache';
 import { awardLoyaltyPointsForOrder } from '@/lib/loyalty';
@@ -137,6 +138,18 @@ export async function createOrder(data: {
 
   await updateDailySummary(branchId);
 
+  void notifyCustomerOrderCreated({
+    phone: data.customerPhone,
+    customerName: data.customerName,
+    orderNumber: order.orderNumber,
+    serviceName: order.serviceType.name,
+    weightKg: data.weightKg,
+    total: order.total,
+    branchName: order.branch.name,
+    estimatedReadyAt: order.estimatedReadyAt,
+    paid: !!data.paymentMethod,
+  }).catch(() => {});
+
   revalidatePath('/cashier');
   revalidatePath('/owner/orders');
   revalidatePath(`/orders/${order.id}`);
@@ -184,7 +197,7 @@ export async function updateOrderStatus(orderId: string, newStatus: string, note
         },
       },
     },
-    include: { customer: true, serviceType: true },
+    include: { customer: true, serviceType: true, branch: true },
   });
 
   await createAuditLog(
@@ -197,6 +210,17 @@ export async function updateOrderStatus(orderId: string, newStatus: string, note
   );
 
   await updateDailySummary(branchId);
+
+  if (updated.customer.phone) {
+    void notifyCustomerOrderStatus({
+      phone: updated.customer.phone,
+      customerName: updated.customer.name,
+      orderNumber: updated.orderNumber,
+      newStatus,
+      branchName: updated.branch.name,
+      branchPhone: updated.branch.phone,
+    }).catch(() => {});
+  }
 
   revalidatePath('/worker');
   revalidatePath('/owner');
