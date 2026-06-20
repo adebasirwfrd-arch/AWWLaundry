@@ -18,6 +18,8 @@ export async function onRequestError(
     routeType: 'render' | 'route' | 'action' | 'middleware' | 'proxy';
   }
 ) {
+  if (process.env.NEXT_RUNTIME !== 'nodejs') return;
+
   const { reportAwwError } = await import('@/lib/aww-dev-log');
 
   const source =

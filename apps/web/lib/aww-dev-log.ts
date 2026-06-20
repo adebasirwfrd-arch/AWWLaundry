@@ -1,4 +1,5 @@
-import { createHash } from 'crypto';
+import 'server-only';
+
 import { sendDevErrorEmail } from '@/lib/brevo';
 import { getAppUrl, getOwnerNotificationEmail } from '@/lib/env';
 
@@ -57,6 +58,14 @@ function normalizeError(error: unknown): {
   return { name: 'UnknownError', message: String(error) };
 }
 
+function hashKey(input: string) {
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    hash = (Math.imul(31, hash) + input.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash).toString(16).padStart(8, '0');
+}
+
 function fingerprint(error: ReturnType<typeof normalizeError>, context: AwwErrorContext) {
   const key = [
     context.source,
@@ -65,7 +74,7 @@ function fingerprint(error: ReturnType<typeof normalizeError>, context: AwwError
     error.message,
     parsePrimaryStackFrame(error.stack ?? ''),
   ].join('|');
-  return createHash('sha256').update(key).digest('hex').slice(0, 16);
+  return hashKey(key);
 }
 
 function parsePrimaryStackFrame(stack: string): string {

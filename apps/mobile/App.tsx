@@ -22,7 +22,7 @@ function isGoogleOAuthUrl(url: string) {
     const parsed = new URL(url);
     if (parsed.hostname.includes('accounts.google.com')) return true;
     if (parsed.hostname.includes('google.com') && parsed.pathname.includes('/oauth')) return true;
-    return parsed.pathname.includes('/api/auth/signin/google');
+    return parsed.pathname.includes('/api/v1/auth/mobile-google');
   } catch {
     return false;
   }
@@ -30,7 +30,7 @@ function isGoogleOAuthUrl(url: string) {
 
 function buildGoogleSignInUrl(callbackUrl: string) {
   const params = new URLSearchParams({ callbackUrl });
-  return `${APP_ORIGIN}/api/auth/signin/google?${params.toString()}`;
+  return `${APP_ORIGIN}/api/v1/auth/mobile-google?${params.toString()}`;
 }
 
 export default function App() {
