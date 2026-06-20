@@ -1,38 +1,29 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import gsap from 'gsap';
-import { isMobileAppWebView } from '@/lib/mobile-webview';
+import { useNativeLiteUI } from '@/hooks/use-native-lite-ui';
 
 const RAINBOW = ['#FF5C9A', '#FF8C2A', '#FFD23F', '#6BCB77', '#4ECDC4', '#4A90D9', '#9B59B6'];
 
 /**
- * Page transition — on every route change, a wave of rainbow bubbles sweeps
- * across the screen and the new content fades up. Inspired by premium apps
- * where navigation feels alive.
+ * Transisi halaman web. Di APK native, hanya render children tanpa GSAP
+ * agar konten tidak pernah tertinggal opacity:0 (penyebab layar transparan/stuck).
  */
 export function PageTransition({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const lite = useNativeLiteUI();
   const overlayRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const [nativeApp] = useState(() =>
-    typeof window !== 'undefined' ? isMobileAppWebView() : false
-  );
-  const [reduced, setReduced] = useState(false);
 
   useEffect(() => {
-    setReduced(window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  }, []);
+    if (lite) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
-  useEffect(() => {
-    if (nativeApp || reduced) return;
     const overlay = overlayRef.current;
-    const content = contentRef.current;
-    if (!overlay || !content) return;
+    if (!overlay) return;
 
     const ctx = gsap.context(() => {
-      // Spawn bubbles for the sweep
       overlay.innerHTML = '';
       const count = window.innerWidth < 768 ? 14 : 26;
       for (let i = 0; i < count; i++) {
@@ -67,32 +58,23 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
           }
         )
         .to(overlay.children, { opacity: 0, duration: 0.3 }, '-=0.4')
-        .set(overlay, { display: 'none' })
-        .fromTo(
-          content,
-          { opacity: 0, y: 16 },
-          { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out' },
-          '-=0.7'
-        );
+        .set(overlay, { display: 'none' });
     });
 
     return () => ctx.revert();
-  }, [pathname, reduced, nativeApp]);
-
-  // Tanpa GSAP di native — cegah konten tertinggal opacity 0 setelah navigasi/login.
-  if (nativeApp || reduced) {
-    return <>{children}</>;
-  }
+  }, [pathname, lite]);
 
   return (
-    <>
-      <div
-        ref={overlayRef}
-        aria-hidden="true"
-        style={{ display: 'none' }}
-        className="pointer-events-none fixed inset-0 z-[9998] overflow-hidden"
-      />
-      <div ref={contentRef}>{children}</div>
-    </>
+    <div data-page-transition-content className="contents">
+      {!lite && (
+        <div
+          ref={overlayRef}
+          aria-hidden="true"
+          style={{ display: 'none' }}
+          className="pointer-events-none fixed inset-0 z-[9998] overflow-hidden"
+        />
+      )}
+      {children}
+    </div>
   );
 }

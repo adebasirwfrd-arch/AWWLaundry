@@ -15,7 +15,32 @@ html.native-app {
 
 html.native-app body {
   min-height: var(--app-vh);
+  height: var(--app-vh);
   overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Cegah layar transparan — konten wajib terlihat setelah navigasi/login */
+html.native-app [data-page-transition-content],
+html.native-app [data-page-transition-content] > *,
+html.native-app main,
+html.native-app [data-native-scroll-main],
+html.native-app [data-dashboard-root] {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+html.native-app [data-dashboard-root] {
+  height: var(--app-vh) !important;
+  max-height: var(--app-vh) !important;
+  overflow: hidden !important;
+}
+
+html.native-app [data-dashboard-content] {
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
 }
 
 html.native-app .min-h-dvh {
@@ -123,6 +148,35 @@ html.native-app [data-native-panel-height] {
 html.native-app.native-landscape [data-native-panel-height] {
   height: calc(var(--app-vh) - 6rem) !important;
   max-height: calc(var(--app-vh) - 6rem) !important;
+}
+
+/* Customer shell — scroll di dalam main */
+html.native-app [data-customer-root] {
+  height: var(--app-vh) !important;
+  max-height: var(--app-vh) !important;
+  overflow: hidden !important;
+}
+
+html.native-app [data-customer-root] [data-native-scroll-main] {
+  height: 100% !important;
+  min-height: 0 !important;
+}
+
+/* Kartu & input tidak overflow horizontal */
+html.native-app .rounded-2xl,
+html.native-app .rounded-3xl,
+html.native-app .glass-card,
+html.native-app input,
+html.native-app textarea,
+html.native-app select,
+html.native-app button {
+  max-width: 100%;
+}
+
+html.native-app img,
+html.native-app video {
+  max-width: 100%;
+  height: auto;
 }
 
 /* Customer: nav horizontal ringkas di landscape */

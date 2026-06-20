@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, BackHandler, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
+import {
+  ActivityIndicator,
+  BackHandler,
+  InteractionManager,
+  Platform,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
 import * as NavigationBar from 'expo-navigation-bar';
@@ -7,18 +15,43 @@ import * as SystemUI from 'expo-system-ui';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView, type WebViewNavigation } from 'react-native-webview';
 import { getNativeUserAgent } from './lib/user-agent';
-import { buildSafeAreaInjectJs, NATIVE_BOOTSTRAP_JS } from './lib/injected-native';
+import { buildNativeCleanupJs, buildSafeAreaInjectJs, NATIVE_BOOTSTRAP_JS } from './lib/injected-native';
 
 const APP_URL = (Constants.expoConfig?.extra?.appUrl as string | undefined) ?? 'https://aww-laundry.vercel.app';
 const APP_ORIGIN = APP_URL.replace(/\/$/, '');
 const START_URL = `${APP_ORIGIN}/?native=1`;
+const LOADER_TIMEOUT_MS = 8000;
 
 function AppContent() {
   const webRef = useRef<WebView>(null);
   const [canGoBack, setCanGoBack] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [showLoader, setShowLoader] = useState(true);
+  const initialLoadDone = useRef(false);
+  const loaderTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
+
+  const hideLoader = useCallback(() => {
+    InteractionManager.runAfterInteractions(() => {
+      setShowLoader(false);
+    });
+    setShowLoader(false);
+  }, []);
+
+  const clearLoaderTimer = useCallback(() => {
+    if (loaderTimer.current) {
+      clearTimeout(loaderTimer.current);
+      loaderTimer.current = null;
+    }
+  }, []);
+
+  const armLoaderFailsafe = useCallback(() => {
+    clearLoaderTimer();
+    loaderTimer.current = setTimeout(() => {
+      setShowLoader(false);
+      initialLoadDone.current = true;
+    }, LOADER_TIMEOUT_MS);
+  }, [clearLoaderTimer]);
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
@@ -27,7 +60,11 @@ function AppContent() {
     void NavigationBar.setButtonStyleAsync('dark');
   }, []);
 
-  // Sinkronkan safe-area & ukuran layar ke CSS WebView setiap rotasi/resize.
+  useEffect(() => {
+    armLoaderFailsafe();
+    return clearLoaderTimer;
+  }, [armLoaderFailsafe, clearLoaderTimer]);
+
   useEffect(() => {
     webRef.current?.injectJavaScript(buildSafeAreaInjectJs(insets));
   }, [insets.top, insets.bottom, insets.left, insets.right, width, height]);
@@ -50,6 +87,22 @@ function AppContent() {
     setCanGoBack(nav.canGoBack);
   }, []);
 
+  const onWebLoadEnd = useCallback(() => {
+    clearLoaderTimer();
+    hideLoader();
+    initialLoadDone.current = true;
+    webRef.current?.injectJavaScript(buildSafeAreaInjectJs(insets));
+    webRef.current?.injectJavaScript(buildNativeCleanupJs());
+  }, [clearLoaderTimer, hideLoader, insets]);
+
+  const onWebLoadStart = useCallback(() => {
+    // Hanya tampilkan overlay pada muat awal — navigasi SPA tidak perlu menutup layar.
+    if (!initialLoadDone.current) {
+      setShowLoader(true);
+      armLoaderFailsafe();
+    }
+  }, [armLoaderFailsafe]);
+
   return (
     <View style={styles.container}>
       <StatusBar style="light" translucent backgroundColor="transparent" />
@@ -59,10 +112,15 @@ function AppContent() {
         userAgent={getNativeUserAgent()}
         injectedJavaScriptBeforeContentLoaded={NATIVE_BOOTSTRAP_JS}
         onNavigationStateChange={onNavigationStateChange}
-        onLoadStart={() => setLoading(true)}
-        onLoadEnd={() => {
-          setLoading(false);
-          webRef.current?.injectJavaScript(buildSafeAreaInjectJs(insets));
+        onLoadStart={onWebLoadStart}
+        onLoadEnd={onWebLoadEnd}
+        onError={() => {
+          clearLoaderTimer();
+          hideLoader();
+        }}
+        onHttpError={() => {
+          clearLoaderTimer();
+          hideLoader();
         }}
         allowsBackForwardNavigationGestures
         pullToRefreshEnabled={false}
@@ -76,11 +134,12 @@ function AppContent() {
         allowsLinkPreview={false}
         automaticallyAdjustContentInsets={false}
         contentInsetAdjustmentBehavior="never"
+        startInLoadingState={false}
         originWhitelist={['https://*', 'http://localhost:*']}
         style={styles.webview}
       />
-      {loading && (
-        <View style={styles.loader}>
+      {showLoader && (
+        <View style={styles.loader} pointerEvents="none">
           <ActivityIndicator size="large" color="#1E3A6E" />
         </View>
       )}

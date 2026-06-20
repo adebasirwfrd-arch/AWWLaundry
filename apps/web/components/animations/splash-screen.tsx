@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { AnimatedLogo } from '@/components/brand/animated-logo';
 import { RainbowBubbleField } from '@/components/animations/rainbow-bubble-field';
+import { useNativeLiteUI } from '@/hooks/use-native-lite-ui';
 import { isMobileAppWebView } from '@/lib/mobile-webview';
 
 /**
@@ -11,15 +12,12 @@ import { isMobileAppWebView } from '@/lib/mobile-webview';
  * Auto-dismisses after the intro timeline completes.
  */
 export function SplashScreen() {
-  // Deteksi native sejak render pertama — hindari race setelah redirect login/OAuth.
-  const [nativeApp] = useState(() =>
-    typeof window !== 'undefined' ? isMobileAppWebView() : false
-  );
+  const lite = useNativeLiteUI();
   const [visible, setVisible] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (nativeApp) return;
+    if (lite || isMobileAppWebView()) return;
     if (typeof window === 'undefined') return;
     const path = window.location.pathname;
     if (path.startsWith('/login') || path.startsWith('/register') || path.startsWith('/forgot-password') || path.startsWith('/reset-password')) return;
@@ -27,7 +25,7 @@ export function SplashScreen() {
     if (seen) return;
     setVisible(true);
     sessionStorage.setItem('aww-splash-seen', '1');
-  }, [nativeApp]);
+  }, [lite]);
 
   // Safety net: apa pun yang terjadi dengan animasi, splash wajib hilang.
   useEffect(() => {
@@ -58,7 +56,7 @@ export function SplashScreen() {
     return () => ctx.revert();
   }, [visible]);
 
-  if (nativeApp || !visible) return null;
+  if (lite || !visible) return null;
 
   return (
     <div

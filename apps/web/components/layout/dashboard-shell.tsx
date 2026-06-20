@@ -29,6 +29,7 @@ import { RainbowBubbleField } from '@/components/animations/rainbow-bubble-field
 import { PageTransition } from '@/components/animations/page-transition';
 import { NotificationBell } from '@/components/layout/notification-bell';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
+import { useNativeLiteUI } from '@/hooks/use-native-lite-ui';
 
 interface NavItem {
   href: string;
@@ -139,6 +140,7 @@ interface DashboardShellProps {
 
 export function DashboardShell({ children, user }: DashboardShellProps) {
   const pathname = usePathname();
+  const lite = useNativeLiteUI();
   const [menuOpen, setMenuOpen] = useState(false);
   const visibleNav = NAV_ITEMS.filter((item) => item.roles.includes(user.role));
   const bottomNav = pickBottomNav(visibleNav, user.role);
@@ -182,8 +184,8 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
   );
 
   return (
-    <div className="relative flex min-h-dvh min-h-0 flex-col bg-aww-brand-hero">
-      <RainbowBubbleField density="low" className="opacity-60" />
+    <div data-dashboard-root className="relative flex h-dvh min-h-0 flex-col overflow-hidden bg-aww-brand-hero">
+      {!lite && <RainbowBubbleField density="low" className="opacity-60" />}
 
       {/* Desktop sidebar — tampil di landscape lebar via native-responsive.css */}
       <aside
@@ -234,7 +236,7 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
         </>
       )}
 
-      <div data-dashboard-content className="relative z-10 flex min-h-dvh min-h-0 flex-1 flex-col lg:ml-64">
+      <div data-dashboard-content className="relative z-10 flex h-full min-h-0 flex-1 flex-col lg:ml-64">
         {/* Mobile top bar */}
         <header
           data-dashboard-mobile-header

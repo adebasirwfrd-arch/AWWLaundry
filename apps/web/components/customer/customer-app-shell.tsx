@@ -28,7 +28,7 @@ export function CustomerAppShell({ children, user, loyaltyPoints = 0 }: Props) {
   const firstName = (user.name ?? 'Pelanggan').split(' ')[0];
 
   return (
-    <div className="relative flex min-h-dvh min-h-0 flex-col bg-white">
+    <div data-customer-root className="relative flex h-dvh min-h-0 flex-col overflow-hidden bg-white">
       {/* Header */}
       <header data-native-header className="sticky top-0 z-40 shrink-0 bg-aww-header text-white shadow-aww-md pt-safe">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3 lg:max-w-4xl">
