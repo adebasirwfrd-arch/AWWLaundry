@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { requireAuth } from '@/lib/session';
 import { Role } from '@aww/database';
 import { DashboardShell } from '@/components/layout/dashboard-shell';
@@ -36,14 +37,16 @@ export default async function InventoryPage({
         </p>
       </div>
 
-      <InventoryDashboard
-        branches={branches}
-        initialBranchId={branchId}
-        items={items}
-        movements={movements}
-        opnames={opnames}
-        summary={summary}
-      />
+      <Suspense fallback={<p className="text-brand-navy/60">Memuat inventori...</p>}>
+        <InventoryDashboard
+          branches={branches}
+          initialBranchId={branchId}
+          items={items}
+          movements={movements}
+          opnames={opnames}
+          summary={summary}
+        />
+      </Suspense>
     </DashboardShell>
   );
 }

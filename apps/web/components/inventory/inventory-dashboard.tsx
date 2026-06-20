@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useMemo, useState, useTransition, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   AlertTriangle,
   ClipboardCheck,
@@ -87,6 +88,28 @@ type Tab = 'items' | 'movements' | 'opname' | 'history';
 
 const CATEGORIES = ['Supplies', 'Chemical', 'Packaging', 'Equipment', 'Lainnya'];
 
+type OpnameStep = 'count' | 'cash' | 'review';
+
+function parseQty(val: string): number {
+  const normalized = val.trim().replace(',', '.');
+  const n = parseFloat(normalized);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function inferOpnameStep(activeOpname: StockOpname | null, urlStep: string | null): OpnameStep {
+  if (urlStep === 'count' || urlStep === 'cash' || urlStep === 'review') return urlStep;
+  if (!activeOpname) return 'count';
+  if (activeOpname.cashExpected != null && activeOpname.cashActual != null) return 'review';
+  return 'count';
+}
+
+function buildInventoryUrl(branchId: string, tab?: Tab, step?: OpnameStep) {
+  const params = new URLSearchParams({ branch: branchId });
+  if (tab) params.set('tab', tab);
+  if (step) params.set('step', step);
+  return `/owner/inventory?${params.toString()}`;
+}
+
 export function InventoryDashboard({
   branches,
   initialBranchId,
@@ -95,7 +118,14 @@ export function InventoryDashboard({
   opnames: initialOpnames,
   summary: initialSummary,
 }: InventoryDashboardProps) {
-  const [tab, setTab] = useState<Tab>('items');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlTab = searchParams.get('tab') as Tab | null;
+  const urlStep = searchParams.get('step');
+
+  const [tab, setTab] = useState<Tab>(
+    urlTab && ['items', 'movements', 'opname', 'history'].includes(urlTab) ? urlTab : 'items'
+  );
   const [branchId, setBranchId] = useState(initialBranchId);
   const [items, setItems] = useState(initialItems);
   const [movements] = useState(initialMovements);
@@ -115,15 +145,30 @@ export function InventoryDashboard({
   });
 
   const [moveForm, setMoveForm] = useState({ itemId: '', type: 'IN' as 'IN' | 'OUT', qty: '', ref: '' });
-  const [opnameStep, setOpnameStep] = useState<'count' | 'cash' | 'review'>('count');
-  const [cashForm, setCashForm] = useState({ expected: '', actual: '', notes: '' });
+  const [opnameStep, setOpnameStep] = useState<OpnameStep>(() =>
+    inferOpnameStep(initialSummary.activeOpname, urlStep)
+  );
+  const [cashForm, setCashForm] = useState({
+    expected: initialSummary.activeOpname?.cashExpected != null ? String(initialSummary.activeOpname.cashExpected) : '',
+    actual: initialSummary.activeOpname?.cashActual != null ? String(initialSummary.activeOpname.cashActual) : '',
+    notes: initialSummary.activeOpname?.notes ?? '',
+  });
   const [lineEdits, setLineEdits] = useState<Record<string, string>>({});
+  const [activeOpname, setActiveOpname] = useState(initialSummary.activeOpname);
 
-  const activeOpname = summary.activeOpname;
   const lowItems = useMemo(() => items.filter((i) => i.currentStock <= i.minStock), [items]);
 
-  function reload() {
-    window.location.href = `/owner/inventory?branch=${branchId}`;
+  const syncUrl = useCallback(
+    (nextTab: Tab, nextStep?: OpnameStep) => {
+      const href = buildInventoryUrl(branchId, nextTab, nextTab === 'opname' ? nextStep : undefined);
+      router.replace(href, { scroll: false });
+    },
+    [branchId, router]
+  );
+
+  function refreshData(nextTab = tab, nextStep = opnameStep) {
+    syncUrl(nextTab, nextStep);
+    router.refresh();
   }
 
   function handleAddItem() {
@@ -141,7 +186,7 @@ export function InventoryDashboard({
         });
         toast.success('Item inventori ditambahkan');
         setShowForm(false);
-        reload();
+        refreshData('items');
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Gagal menyimpan');
       }
@@ -159,7 +204,7 @@ export function InventoryDashboard({
           reference: moveForm.ref || undefined,
         });
         toast.success('Pergerakan stok dicatat');
-        reload();
+        refreshData('movements');
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Gagal');
       }
@@ -171,7 +216,9 @@ export function InventoryDashboard({
       try {
         await createStockOpname(branchId);
         toast.success('Sesi opname dimulai');
-        reload();
+        setTab('opname');
+        setOpnameStep('count');
+        refreshData('opname', 'count');
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Gagal memulai opname');
       }
@@ -182,17 +229,26 @@ export function InventoryDashboard({
     if (!activeOpname) return;
     startTransition(async () => {
       try {
+        const updatedLines = [];
         for (const line of activeOpname.lines) {
           const val = lineEdits[line.id] ?? String(line.physicalQty);
-          await updateOpnameLine({
+          const physicalQty = parseQty(val);
+          const updated = await updateOpnameLine({
             branchId,
             lineId: line.id,
-            physicalQty: parseFloat(val) || 0,
+            physicalQty,
+          });
+          updatedLines.push({
+            ...line,
+            physicalQty: updated.physicalQty,
+            variance: updated.variance,
+            varianceCost: updated.varianceCost,
           });
         }
-        toast.success('Hitungan fisik disimpan');
+        setActiveOpname({ ...activeOpname, lines: updatedLines });
         setOpnameStep('cash');
-        reload();
+        syncUrl('opname', 'cash');
+        toast.success('Hitungan fisik disimpan');
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Gagal menyimpan');
       }
@@ -203,16 +259,25 @@ export function InventoryDashboard({
     if (!activeOpname) return;
     startTransition(async () => {
       try {
-        await updateOpnameCash({
+        const cashExpected = parseQty(cashForm.expected);
+        const cashActual = parseQty(cashForm.actual);
+        const updated = await updateOpnameCash({
           branchId,
           opnameId: activeOpname.id,
-          cashExpected: parseFloat(cashForm.expected) || 0,
-          cashActual: parseFloat(cashForm.actual) || 0,
+          cashExpected,
+          cashActual,
           notes: cashForm.notes || undefined,
         });
-        toast.success('Rekonsiliasi kas disimpan');
+        setActiveOpname({
+          ...activeOpname,
+          cashExpected: updated.cashExpected,
+          cashActual: updated.cashActual,
+          cashVariance: updated.cashVariance,
+          notes: updated.notes,
+        });
         setOpnameStep('review');
-        reload();
+        syncUrl('opname', 'review');
+        toast.success('Rekonsiliasi kas disimpan');
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Gagal');
       }
@@ -225,7 +290,9 @@ export function InventoryDashboard({
       try {
         await approveStockOpname(activeOpname.id, branchId);
         toast.success('Opname disetujui — stok disesuaikan');
-        reload();
+        setActiveOpname(null);
+        setOpnameStep('count');
+        refreshData('history');
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Gagal approve');
       }
@@ -238,7 +305,9 @@ export function InventoryDashboard({
       try {
         await cancelStockOpname(activeOpname.id, branchId);
         toast.success('Opname dibatalkan');
-        reload();
+        setActiveOpname(null);
+        setOpnameStep('count');
+        refreshData('opname');
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Gagal');
       }
@@ -260,8 +329,9 @@ export function InventoryDashboard({
           label="Cabang"
           value={branchId}
           onChange={(e) => {
-            setBranchId(e.target.value);
-            window.location.href = `/owner/inventory?branch=${e.target.value}`;
+            const nextBranch = e.target.value;
+            setBranchId(nextBranch);
+            router.push(buildInventoryUrl(nextBranch, tab, tab === 'opname' ? opnameStep : undefined));
           }}
           options={branches.map((b) => ({ value: b.id, label: `${b.code} — ${b.name}` }))}
         />
@@ -290,7 +360,10 @@ export function InventoryDashboard({
             key={t.id}
             variant={tab === t.id ? 'primary' : 'outline'}
             size="sm"
-            onClick={() => setTab(t.id)}
+            onClick={() => {
+              setTab(t.id);
+              syncUrl(t.id, t.id === 'opname' ? opnameStep : undefined);
+            }}
           >
             <t.icon className="h-4 w-4" />
             {t.label}
@@ -434,8 +507,8 @@ export function InventoryDashboard({
                         <span className="col-span-2 font-medium">{line.item.name}</span>
                         <span className="text-brand-navy/50">Sistem: {line.systemQty}</span>
                         <Input
-                          type="number"
-                          step="0.1"
+                          type="text"
+                          inputMode="decimal"
                           value={lineEdits[line.id] ?? String(line.physicalQty)}
                           onChange={(e) => setLineEdits({ ...lineEdits, [line.id]: e.target.value })}
                         />
@@ -458,7 +531,10 @@ export function InventoryDashboard({
                     <Input label="Catatan" className="sm:col-span-2" value={cashForm.notes} onChange={(e) => setCashForm({ ...cashForm, notes: e.target.value })} />
                     <div className="flex gap-2">
                       <Button onClick={saveCash} disabled={pending}>Lanjut Review</Button>
-                      <Button variant="outline" onClick={() => setOpnameStep('count')}>Kembali</Button>
+                      <Button variant="outline" onClick={() => {
+                        setOpnameStep('count');
+                        syncUrl('opname', 'count');
+                      }}>Kembali</Button>
                     </div>
                   </CardContent>
                 </Card>

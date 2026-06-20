@@ -19,9 +19,16 @@ async function inventoryCtx(branchId?: string) {
 
 export async function listInventoryItems(branchId?: string) {
   const { branchId: bid } = await inventoryCtx(branchId);
-  return prisma.inventoryItem.findMany({
+  const items = await prisma.inventoryItem.findMany({
     where: { branchId: bid },
-    orderBy: [{ category: 'asc' }, { name: 'asc' }],
+    orderBy: [{ category: 'asc' }, { name: 'asc' }, { sku: 'desc' }],
+  });
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = (item.sku ?? item.name).toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
 }
 
@@ -176,8 +183,19 @@ export async function createStockOpname(branchId?: string) {
   });
   if (draft) throw new Error('Masih ada opname yang belum selesai');
 
-  const items = await prisma.inventoryItem.findMany({ where: { branchId: bid } });
+  const items = await prisma.inventoryItem.findMany({
+    where: { branchId: bid },
+    orderBy: [{ sku: 'desc' }, { name: 'asc' }],
+  });
   if (items.length === 0) throw new Error('Belum ada item inventori');
+
+  const seen = new Set<string>();
+  const uniqueItems = items.filter((item) => {
+    const key = (item.sku ?? item.name).toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 
   const opname = await prisma.$transaction(async (tx) => {
     const created = await tx.stockOpname.create({
@@ -187,7 +205,7 @@ export async function createStockOpname(branchId?: string) {
         status: 'COUNTING',
         createdById: session.user.id,
         lines: {
-          create: items.map((item) => ({
+          create: uniqueItems.map((item) => ({
             itemId: item.id,
             systemQty: item.currentStock,
             physicalQty: item.currentStock,
@@ -207,7 +225,7 @@ export async function createStockOpname(branchId?: string) {
     'StockOpname',
     opname.id,
     null,
-    { lineCount: items.length }
+    { lineCount: uniqueItems.length }
   );
 
   revalidatePath('/owner/inventory');
