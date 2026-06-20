@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useId } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { toast } from '@/lib/toast';
@@ -47,6 +47,7 @@ function mapRealtimeMessage(row: Record<string, unknown>): ChatMessage {
 export function useChatMessages(conversationId: string) {
   const queryClient = useQueryClient();
   const realtimeEnabled = isSupabaseBrowserConfigured();
+  const instanceId = useId();
 
   const query = useQuery({
     queryKey: queryKeys.chat.messages(conversationId),
@@ -63,7 +64,7 @@ export function useChatMessages(conversationId: string) {
 
     const supabase = getSupabaseBrowser();
     const channel = supabase
-      .channel(`messages:${conversationId}`)
+      .channel(`messages:${conversationId}:${instanceId}`)
       .on(
         'postgres_changes',
         {
@@ -89,7 +90,7 @@ export function useChatMessages(conversationId: string) {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [conversationId, queryClient, realtimeEnabled]);
+  }, [conversationId, queryClient, realtimeEnabled, instanceId]);
 
   return query;
 }

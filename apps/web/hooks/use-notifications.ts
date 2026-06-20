@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useId } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { getSupabaseBrowser, isSupabaseBrowserConfigured } from '@/lib/supabase-browser';
@@ -41,6 +41,8 @@ function mapRealtimeNotification(row: Record<string, unknown>): NotificationItem
 export function useNotifications() {
   const queryClient = useQueryClient();
   const realtimeEnabled = isSupabaseBrowserConfigured();
+  // ID unik per instance hook — cegah bentrok channel saat komponen dirender >1x (mis. bell desktop + mobile)
+  const instanceId = useId();
 
   const query = useQuery({
     queryKey: queryKeys.notifications,
@@ -58,7 +60,7 @@ export function useNotifications() {
 
     const supabase = getSupabaseBrowser();
     const channel = supabase
-      .channel(`notifications:${userId}`)
+      .channel(`notifications:${userId}:${instanceId}`)
       .on(
         'postgres_changes',
         {
@@ -109,7 +111,7 @@ export function useNotifications() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [query.data?.userId, queryClient, realtimeEnabled]);
+  }, [query.data?.userId, queryClient, realtimeEnabled, instanceId]);
 
   return query;
 }
