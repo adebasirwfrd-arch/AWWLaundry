@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { prisma, Role, type ExpenseType, type PaymentMethod } from '@aww/database';
+import { prisma, Role, type BuildingStatus, type ExpenseType, type PaymentMethod } from '@aww/database';
 import { requireAuth } from '@/lib/session';
 import { createAuditLog } from '@/lib/audit';
 import {
@@ -11,6 +11,8 @@ import {
 import type { DashboardPeriod } from '@/lib/date-buckets';
 import { defaultCategories } from '@/lib/expense-defaults';
 import { processCapexDueReminders } from '@/lib/capex-due-reminders';
+import { isBuildingCapexCategory } from '@/lib/capex-asset';
+import { isAllowedMachineType, resolveMachineTypeFromCategory } from '@/lib/machine-types';
 
 const VIEW_ROLES = [Role.OWNER, Role.SUPER_ADMIN, Role.MANAGER, Role.CASHIER];
 
@@ -64,6 +66,17 @@ export async function createExpense(input: {
   date: string;
   dueDate?: string;
   proofUrl?: string;
+  assetBrand?: string;
+  assetModelType?: string;
+  assetSerialNumber?: string;
+  assetProductionYear?: number | null;
+  assetPurchaseYear?: number | null;
+  propertyAddress?: string;
+  propertyOwnerContact?: string;
+  buildingStatus?: BuildingStatus | null;
+  addToProductionBoard?: boolean;
+  machineType?: string | null;
+  machineCapacityKg?: number | null;
 }) {
   const c = await ctx();
   const category = input.category.trim();
@@ -93,23 +106,99 @@ export async function createExpense(input: {
     }
   }
 
-  const expense = await prisma.expense.create({
-    data: {
-      branchId: branch.id,
-      type: input.type,
-      category,
-      title,
-      vendor: input.vendor?.trim() || null,
-      paymentMethod: input.paymentMethod ?? null,
-      amount: input.amount,
-      discount,
-      netAmount,
-      description: input.description?.trim() || null,
-      date: new Date(input.date),
-      dueDate,
-      proofUrl: input.proofUrl ?? null,
-      createdById: c.userId,
-    },
+  const machineType =
+    input.type === 'CAPEX' ? input.machineType ?? resolveMachineTypeFromCategory(category) : null;
+  const isMachineCapex = !!machineType;
+  const isBuildingCapex = input.type === 'CAPEX' && isBuildingCapexCategory(category);
+
+  if (isMachineCapex) {
+    if (!input.assetBrand?.trim()) throw new Error('Merk mesin wajib diisi');
+    if (!input.assetModelType?.trim()) throw new Error('Tipe mesin wajib diisi');
+    if (!input.assetSerialNumber?.trim()) throw new Error('Nomor seri mesin wajib diisi');
+    if (!input.assetProductionYear) throw new Error('Tahun produksi wajib diisi');
+    if (!input.assetPurchaseYear) throw new Error('Tahun pembelian wajib diisi');
+    if (!input.vendor?.trim()) throw new Error('Vendor wajib diisi untuk CAPEX mesin');
+  }
+
+  if (isBuildingCapex) {
+    if (!input.propertyAddress?.trim()) throw new Error('Alamat ruko wajib diisi');
+    if (!input.propertyOwnerContact?.trim()) throw new Error('No. kontak pemilik ruko wajib diisi');
+    if (!input.buildingStatus) throw new Error('Status bangunan (sewa/beli) wajib dipilih');
+  }
+
+  const canAddMachine =
+    c.role === Role.OWNER || c.role === Role.SUPER_ADMIN
+      ? input.addToProductionBoard === true
+      : false;
+
+  if (canAddMachine && machineType) {
+    if (!isAllowedMachineType(machineType)) throw new Error('Tipe mesin tidak valid');
+    const duplicate = await prisma.machine.findFirst({
+      where: { branchId: branch.id, name: input.assetSerialNumber!.trim() },
+      select: { id: true },
+    });
+    if (duplicate) throw new Error(`Unit "${input.assetSerialNumber!.trim()}" sudah terdaftar di cabang ${branch.name}`);
+  }
+
+  const expenseDate = new Date(input.date);
+  const assetProductionYear = input.assetProductionYear ?? null;
+  const assetPurchaseYear = input.assetPurchaseYear ?? null;
+
+  const expense = await prisma.$transaction(async (tx) => {
+    const created = await tx.expense.create({
+      data: {
+        branchId: branch.id,
+        type: input.type,
+        category,
+        title,
+        vendor: input.vendor?.trim() || null,
+        paymentMethod: input.paymentMethod ?? null,
+        amount: input.amount,
+        discount,
+        netAmount,
+        description: input.description?.trim() || null,
+        date: expenseDate,
+        dueDate,
+        proofUrl: input.proofUrl ?? null,
+        assetBrand: isMachineCapex ? input.assetBrand!.trim() : null,
+        assetModelType: isMachineCapex ? input.assetModelType!.trim() : null,
+        assetSerialNumber: isMachineCapex ? input.assetSerialNumber!.trim() : null,
+        assetProductionYear: isMachineCapex ? assetProductionYear : null,
+        assetPurchaseYear: isMachineCapex ? assetPurchaseYear : null,
+        propertyAddress: isBuildingCapex ? input.propertyAddress!.trim() : null,
+        propertyOwnerContact: isBuildingCapex ? input.propertyOwnerContact!.trim() : null,
+        buildingStatus: isBuildingCapex ? input.buildingStatus! : null,
+        createdById: c.userId,
+      },
+    });
+
+    if (canAddMachine && machineType && isMachineCapex) {
+      const serial = input.assetSerialNumber!.trim();
+      const capacityKg =
+        input.machineCapacityKg != null &&
+        !Number.isNaN(input.machineCapacityKg) &&
+        input.machineCapacityKg > 0
+          ? input.machineCapacityKg
+          : null;
+
+      await tx.machine.create({
+        data: {
+          branchId: branch.id,
+          name: serial,
+          type: machineType,
+          capacityKg,
+          status: 'IDLE',
+          expenseId: created.id,
+          brand: input.assetBrand!.trim(),
+          modelType: input.assetModelType!.trim(),
+          serialNumber: serial,
+          productionYear: assetProductionYear,
+          purchaseYear: assetPurchaseYear,
+        },
+      });
+    }
+
+    return created;
   });
 
   if (dueDate) {
@@ -128,6 +217,7 @@ export async function createExpense(input: {
   revalidatePath('/owner/cashflow');
   revalidatePath('/cashier/cashflow');
   revalidatePath('/owner/audit-trail');
+  if (canAddMachine && machineType) revalidatePath('/worker');
 
   const creator = await prisma.user.findUnique({
     where: { id: c.userId },
@@ -151,6 +241,14 @@ export async function createExpense(input: {
       branchName: branch.name,
       createdBy: creator?.name ?? '—',
       description: expense.description,
+      assetBrand: expense.assetBrand,
+      assetModelType: expense.assetModelType,
+      assetSerialNumber: expense.assetSerialNumber,
+      assetProductionYear: expense.assetProductionYear,
+      assetPurchaseYear: expense.assetPurchaseYear,
+      propertyAddress: expense.propertyAddress,
+      propertyOwnerContact: expense.propertyOwnerContact,
+      buildingStatus: expense.buildingStatus,
     },
   };
 }
@@ -183,6 +281,25 @@ export async function createExpenseWithProof(formData: FormData) {
     throw new Error('Upload bukti bayar wajib untuk Transfer / QRIS');
   }
 
+  const assetBrand = String(formData.get('assetBrand') ?? '').trim() || undefined;
+  const assetModelType = String(formData.get('assetModelType') ?? '').trim() || undefined;
+  const assetSerialNumber = String(formData.get('assetSerialNumber') ?? '').trim() || undefined;
+  const assetProductionYearRaw = String(formData.get('assetProductionYear') ?? '').trim();
+  const assetPurchaseYearRaw = String(formData.get('assetPurchaseYear') ?? '').trim();
+  const propertyAddress = String(formData.get('propertyAddress') ?? '').trim() || undefined;
+  const propertyOwnerContact = String(formData.get('propertyOwnerContact') ?? '').trim() || undefined;
+  const buildingStatusRaw = String(formData.get('buildingStatus') ?? '').trim();
+  const addToProductionBoard = String(formData.get('addToProductionBoard') ?? '') === 'true';
+  const machineCapacityKgRaw = String(formData.get('machineCapacityKg') ?? '').trim();
+
+  const assetProductionYear = assetProductionYearRaw ? parseInt(assetProductionYearRaw, 10) : null;
+  const assetPurchaseYear = assetPurchaseYearRaw ? parseInt(assetPurchaseYearRaw, 10) : null;
+  const machineCapacityKg = machineCapacityKgRaw ? parseFloat(machineCapacityKgRaw) : null;
+  const buildingStatus =
+    buildingStatusRaw === 'SEWA' || buildingStatusRaw === 'BELI'
+      ? (buildingStatusRaw as BuildingStatus)
+      : null;
+
   return createExpense({
     branchId,
     type,
@@ -196,6 +313,16 @@ export async function createExpenseWithProof(formData: FormData) {
     date,
     dueDate: type === 'CAPEX' && dueDateRaw ? dueDateRaw : undefined,
     proofUrl: proofUrlRaw || undefined,
+    assetBrand,
+    assetModelType,
+    assetSerialNumber,
+    assetProductionYear,
+    assetPurchaseYear,
+    propertyAddress,
+    propertyOwnerContact,
+    buildingStatus,
+    addToProductionBoard,
+    machineCapacityKg,
   });
 }
 

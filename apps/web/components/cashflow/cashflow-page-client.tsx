@@ -34,8 +34,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { getCashflowData, createExpenseWithProof, deleteExpense, getExpenseCategoryOptions } from '@/app/actions/cashflow';
-import { createProductionMachine } from '@/app/actions/production-board';
 import { resolveMachineTypeFromCategory } from '@/lib/machine-types';
+import { isBuildingCapexCategory, BUILDING_STATUS_OPTIONS } from '@/lib/capex-asset';
 import { PaymentProofCapture } from '@/components/pos/payment-proof-capture';
 import { ExpenseDetailModal, type ExpenseRow } from '@/components/cashflow/expense-detail-modal';
 import { PERIOD_LABELS, type DashboardPeriod } from '@/lib/date-buckets';
@@ -67,11 +67,13 @@ export function CashflowPageClient({
   showBranchFilter,
   defaultBranchId,
   branchLabel,
+  canManageMachines = false,
 }: {
   initialData: CashflowData;
   showBranchFilter: boolean;
   defaultBranchId?: string;
   branchLabel?: string;
+  canManageMachines?: boolean;
 }) {
   const [data, setData] = useState(initialData);
   const mainTab = useCashflowFiltersStore((s) => s.mainTab);
@@ -110,6 +112,13 @@ export function CashflowPageClient({
     addToProductionBoard: true,
     machineSerialNumber: '',
     machineCapacityKg: '',
+    assetBrand: '',
+    assetModelType: '',
+    assetProductionYear: '',
+    assetPurchaseYear: '',
+    propertyAddress: '',
+    propertyOwnerContact: '',
+    buildingStatus: '',
   });
 
   useEffect(() => {
@@ -166,6 +175,13 @@ export function CashflowPageClient({
       addToProductionBoard: true,
       machineSerialNumber: '',
       machineCapacityKg: '',
+      assetBrand: '',
+      assetModelType: '',
+      assetProductionYear: '',
+      assetPurchaseYear: '',
+      propertyAddress: '',
+      propertyOwnerContact: '',
+      buildingStatus: '',
     }));
     setProofUrl(null);
     setProofPreview(null);
@@ -207,9 +223,46 @@ export function CashflowPageClient({
 
     const machineType =
       expenseTab === 'CAPEX' ? resolveMachineTypeFromCategory(category) : null;
-    if (expenseTab === 'CAPEX' && form.addToProductionBoard && machineType) {
+    const buildingCapex = expenseTab === 'CAPEX' && isBuildingCapexCategory(category);
+
+    if (machineType) {
+      if (!form.assetBrand.trim()) {
+        setFormError('Merk mesin wajib diisi');
+        return;
+      }
+      if (!form.assetModelType.trim()) {
+        setFormError('Tipe mesin wajib diisi');
+        return;
+      }
       if (!form.machineSerialNumber.trim()) {
-        setFormError('Nomor seri mesin wajib diisi untuk menambah unit ke board produksi');
+        setFormError('Nomor seri mesin wajib diisi');
+        return;
+      }
+      if (!form.assetProductionYear.trim()) {
+        setFormError('Tahun produksi wajib diisi');
+        return;
+      }
+      if (!form.assetPurchaseYear.trim()) {
+        setFormError('Tahun pembelian wajib diisi');
+        return;
+      }
+      if (!form.vendor.trim()) {
+        setFormError('Vendor wajib diisi untuk CAPEX mesin');
+        return;
+      }
+    }
+
+    if (buildingCapex) {
+      if (!form.propertyAddress.trim()) {
+        setFormError('Alamat ruko wajib diisi');
+        return;
+      }
+      if (!form.propertyOwnerContact.trim()) {
+        setFormError('No. kontak pemilik ruko wajib diisi');
+        return;
+      }
+      if (!form.buildingStatus) {
+        setFormError('Status bangunan (sewa/beli) wajib dipilih');
         return;
       }
     }
@@ -231,23 +284,30 @@ export function CashflowPageClient({
       fd.append('date', form.date);
       if (expenseTab === 'CAPEX' && form.dueDate) fd.append('dueDate', form.dueDate);
       if (proofUrl) fd.append('proofUrl', proofUrl);
+      if (machineType) {
+        fd.append('assetBrand', form.assetBrand.trim());
+        fd.append('assetModelType', form.assetModelType.trim());
+        fd.append('assetSerialNumber', form.machineSerialNumber.trim());
+        fd.append('assetProductionYear', form.assetProductionYear.trim());
+        fd.append('assetPurchaseYear', form.assetPurchaseYear.trim());
+        if (form.machineCapacityKg) fd.append('machineCapacityKg', form.machineCapacityKg);
+        if (canManageMachines) {
+          fd.append('addToProductionBoard', form.addToProductionBoard ? 'true' : 'false');
+        }
+      }
+      if (buildingCapex) {
+        fd.append('propertyAddress', form.propertyAddress.trim());
+        fd.append('propertyOwnerContact', form.propertyOwnerContact.trim());
+        fd.append('buildingStatus', form.buildingStatus);
+      }
 
       const result = await createExpenseWithProof(fd);
-
-      if (expenseTab === 'CAPEX' && form.addToProductionBoard && machineType) {
-        await createProductionMachine({
-          branchId: form.branchId,
-          serialNumber: form.machineSerialNumber.trim(),
-          type: machineType,
-          capacityKg: form.machineCapacityKg ? parseFloat(form.machineCapacityKg) : null,
-        });
-      }
 
       setShowForm(false);
       setProofUrl(null);
       setProofPreview(null);
       setMessage(
-        expenseTab === 'CAPEX' && form.addToProductionBoard && machineType
+        canManageMachines && expenseTab === 'CAPEX' && form.addToProductionBoard && machineType
           ? 'Pengeluaran tersimpan & unit mesin ditambahkan ke board produksi'
           : 'Pengeluaran tersimpan'
       );
@@ -430,6 +490,7 @@ export function CashflowPageClient({
               categories={categories}
               branches={data.branches}
               showBranchPicker={showBranchFilter}
+              canManageMachines={canManageMachines}
               pending={saving}
               formError={formError}
               proofPreview={proofPreview}
@@ -774,6 +835,7 @@ function ExpenseForm({
   categories,
   branches,
   showBranchPicker,
+  canManageMachines = false,
   pending,
   formError,
   proofPreview,
@@ -798,11 +860,19 @@ function ExpenseForm({
     addToProductionBoard: boolean;
     machineSerialNumber: string;
     machineCapacityKg: string;
+    assetBrand: string;
+    assetModelType: string;
+    assetProductionYear: string;
+    assetPurchaseYear: string;
+    propertyAddress: string;
+    propertyOwnerContact: string;
+    buildingStatus: string;
   };
   setForm: React.Dispatch<React.SetStateAction<typeof form>>;
   categories: string[];
   branches: Array<{ id: string; name: string }>;
   showBranchPicker: boolean;
+  canManageMachines?: boolean;
   pending: boolean;
   formError: string | null;
   proofPreview: string | null;
@@ -816,7 +886,8 @@ function ExpenseForm({
     form.paymentMethod === 'BANK_TRANSFER' || form.paymentMethod === 'QRIS';
   const resolvedCategory = form.customCategory.trim() || form.category.trim() || form.title.trim();
   const machineType = type === 'CAPEX' ? resolveMachineTypeFromCategory(resolvedCategory) : null;
-  const showMachineFields = type === 'CAPEX' && !!machineType && form.addToProductionBoard;
+  const buildingCapex = type === 'CAPEX' && isBuildingCapexCategory(resolvedCategory);
+  const showMachineFields = type === 'CAPEX' && !!machineType;
 
   return (
     <div className="rounded-2xl border border-rainbow-cyan/30 bg-brand-sky/5 p-5">
@@ -890,43 +961,113 @@ function ExpenseForm({
         <div className="sm:col-span-2 lg:col-span-3">
           <Input label="Catatan tambahan" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         </div>
-        {type === 'CAPEX' && machineType && (
-          <div className="sm:col-span-2 lg:col-span-3 rounded-xl border border-rainbow-green/25 bg-rainbow-green/5 p-4">
-            <label className="flex cursor-pointer items-start gap-3">
-              <input
-                type="checkbox"
-                checked={form.addToProductionBoard}
-                onChange={(e) => setForm({ ...form, addToProductionBoard: e.target.checked })}
-                className="mt-1 h-4 w-4 rounded border-brand-navy/20"
+        {showMachineFields && (
+          <div className="sm:col-span-2 lg:col-span-3 rounded-xl border border-rainbow-blue/25 bg-rainbow-blue/5 p-4">
+            <p className="text-sm font-semibold text-brand-navy">Detail Mesin ({machineType})</p>
+            <p className="mt-0.5 text-xs text-brand-navy/55">
+              Wajib diisi untuk CAPEX mesin cuci, pengering, atau setrika uap.
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <Input
+                label="Merk"
+                value={form.assetBrand}
+                onChange={(e) => setForm({ ...form, assetBrand: e.target.value })}
+                placeholder="Mis: LG, Samsung, Electrolux"
               />
-              <span>
-                <span className="block text-sm font-semibold text-brand-navy">
-                  Tambahkan unit ke Board Produksi
-                </span>
-                <span className="mt-0.5 block text-xs text-brand-navy/55">
-                  Kategori mesin terdeteksi ({machineType}). Unit akan muncul di board produksi cabang yang dipilih.
-                </span>
-              </span>
-            </label>
-            {showMachineFields && (
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <Input
-                  label="Nomor Seri Mesin (nama unit)"
-                  value={form.machineSerialNumber}
-                  onChange={(e) => setForm({ ...form, machineSerialNumber: e.target.value })}
-                  placeholder="Mis: SN-WASH-2026-0042"
+              <Input
+                label="Tipe / Model"
+                value={form.assetModelType}
+                onChange={(e) => setForm({ ...form, assetModelType: e.target.value })}
+                placeholder="Mis: Front Load 15kg"
+              />
+              <Input
+                label="Nomor Seri"
+                value={form.machineSerialNumber}
+                onChange={(e) => setForm({ ...form, machineSerialNumber: e.target.value })}
+                placeholder="Mis: SN-WASH-2026-0042"
+              />
+              <Input
+                label="Tahun Produksi"
+                type="number"
+                min="1990"
+                max={String(new Date().getFullYear())}
+                value={form.assetProductionYear}
+                onChange={(e) => setForm({ ...form, assetProductionYear: e.target.value })}
+                placeholder="Mis: 2024"
+              />
+              <Input
+                label="Tahun Pembelian"
+                type="number"
+                min="1990"
+                max={String(new Date().getFullYear() + 1)}
+                value={form.assetPurchaseYear}
+                onChange={(e) => setForm({ ...form, assetPurchaseYear: e.target.value })}
+                placeholder="Mis: 2025"
+              />
+              <Input
+                label="Kapasitas (kg, opsional)"
+                type="number"
+                min="0"
+                step="0.1"
+                value={form.machineCapacityKg}
+                onChange={(e) => setForm({ ...form, machineCapacityKg: e.target.value })}
+                placeholder="Mis: 15"
+              />
+            </div>
+            {canManageMachines && (
+              <label className="mt-4 flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={form.addToProductionBoard}
+                  onChange={(e) => setForm({ ...form, addToProductionBoard: e.target.checked })}
+                  className="mt-1 h-4 w-4 rounded border-brand-navy/20"
                 />
+                <span>
+                  <span className="block text-sm font-semibold text-brand-navy">
+                    Tambahkan unit ke Board Produksi
+                  </span>
+                  <span className="mt-0.5 block text-xs text-brand-navy/55">
+                    Unit akan muncul di board produksi cabang yang dipilih dengan nomor seri sebagai nama unit.
+                  </span>
+                </span>
+              </label>
+            )}
+          </div>
+        )}
+        {buildingCapex && (
+          <div className="sm:col-span-2 lg:col-span-3 rounded-xl border border-rainbow-orange/25 bg-rainbow-orange/5 p-4">
+            <p className="text-sm font-semibold text-brand-navy">Detail Ruko / Bangunan</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
                 <Input
-                  label="Kapasitas (kg, opsional)"
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  value={form.machineCapacityKg}
-                  onChange={(e) => setForm({ ...form, machineCapacityKg: e.target.value })}
-                  placeholder="Mis: 15"
+                  label="Alamat Ruko"
+                  value={form.propertyAddress}
+                  onChange={(e) => setForm({ ...form, propertyAddress: e.target.value })}
+                  placeholder="Jl. ..., No. ..., Kota"
                 />
               </div>
-            )}
+              <Input
+                label="No. Kontak Pemilik Ruko"
+                value={form.propertyOwnerContact}
+                onChange={(e) => setForm({ ...form, propertyOwnerContact: e.target.value })}
+                placeholder="Mis: 0812xxxxxxx"
+              />
+              <div>
+                <label className="mb-1 block text-sm font-medium text-brand-navy">Status Bangunan</label>
+                <select
+                  value={form.buildingStatus}
+                  onChange={(e) => setForm({ ...form, buildingStatus: e.target.value })}
+                  className="h-11 w-full rounded-xl border border-brand-navy/15 px-3 text-sm"
+                >
+                  <option value="">— Pilih —</option>
+                  {BUILDING_STATUS_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
         )}
         <div className="sm:col-span-2 lg:col-span-3">

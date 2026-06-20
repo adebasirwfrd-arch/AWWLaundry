@@ -26,6 +26,9 @@ export default async function CashflowPage() {
         initialData={data}
         showBranchFilter={showBranchFilter}
         defaultBranchId={managerBranchId}
+        canManageMachines={
+          session.user.role === Role.OWNER || session.user.role === Role.SUPER_ADMIN
+        }
       />
     </DashboardShell>
   );

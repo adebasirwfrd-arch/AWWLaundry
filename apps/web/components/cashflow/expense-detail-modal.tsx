@@ -3,6 +3,8 @@
 import { X, Building2, Calendar, CreditCard, ImageIcon } from 'lucide-react';
 import { formatCurrency, PAYMENT_METHOD_LABELS } from '@aww/shared';
 import { EXPENSE_TYPE_LABELS } from '@/lib/expense-defaults';
+import { BUILDING_STATUS_LABELS } from '@/lib/capex-asset';
+import type { BuildingStatus } from '@aww/database';
 
 export type ExpenseRow = {
   id: string;
@@ -20,6 +22,14 @@ export type ExpenseRow = {
   branchName: string;
   createdBy: string;
   description: string | null;
+  assetBrand?: string | null;
+  assetModelType?: string | null;
+  assetSerialNumber?: string | null;
+  assetProductionYear?: number | null;
+  assetPurchaseYear?: number | null;
+  propertyAddress?: string | null;
+  propertyOwnerContact?: string | null;
+  buildingStatus?: string | null;
 };
 
 export function ExpenseDetailModal({
@@ -82,6 +92,44 @@ export function ExpenseDetailModal({
             />
             {expense.vendor && <DetailItem icon={Building2} label="Vendor" value={expense.vendor} />}
           </div>
+
+          {(expense.assetBrand || expense.assetSerialNumber) && (
+            <div className="rounded-2xl border border-rainbow-blue/20 bg-rainbow-blue/5 p-4">
+              <p className="mb-3 text-sm font-semibold text-brand-navy">Detail Mesin</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {expense.assetBrand && <DetailItem icon={Building2} label="Merk" value={expense.assetBrand} />}
+                {expense.assetModelType && <DetailItem icon={Building2} label="Tipe / Model" value={expense.assetModelType} />}
+                {expense.assetSerialNumber && <DetailItem icon={Building2} label="Nomor Seri" value={expense.assetSerialNumber} />}
+                {expense.assetProductionYear && (
+                  <DetailItem icon={Calendar} label="Tahun Produksi" value={String(expense.assetProductionYear)} />
+                )}
+                {expense.assetPurchaseYear && (
+                  <DetailItem icon={Calendar} label="Tahun Pembelian" value={String(expense.assetPurchaseYear)} />
+                )}
+              </div>
+            </div>
+          )}
+
+          {(expense.propertyAddress || expense.buildingStatus) && (
+            <div className="rounded-2xl border border-rainbow-orange/20 bg-rainbow-orange/5 p-4">
+              <p className="mb-3 text-sm font-semibold text-brand-navy">Detail Ruko / Bangunan</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {expense.propertyAddress && (
+                  <DetailItem icon={Building2} label="Alamat" value={expense.propertyAddress} />
+                )}
+                {expense.propertyOwnerContact && (
+                  <DetailItem icon={Building2} label="Kontak Pemilik" value={expense.propertyOwnerContact} />
+                )}
+                {expense.buildingStatus && (
+                  <DetailItem
+                    icon={Building2}
+                    label="Status Bangunan"
+                    value={BUILDING_STATUS_LABELS[expense.buildingStatus as BuildingStatus] ?? expense.buildingStatus}
+                  />
+                )}
+              </div>
+            </div>
+          )}
 
           {expense.description && (
             <p className="rounded-xl bg-brand-sky/5 px-3 py-2 text-sm text-brand-navy/70">

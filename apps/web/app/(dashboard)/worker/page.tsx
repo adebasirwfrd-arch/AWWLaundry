@@ -33,7 +33,7 @@ export default async function WorkerPage() {
         machines={data.machines}
         branches={branches}
         showBranchFilter={canPickBranch && branches.length > 0}
-        canResolveMachines={canPickBranch}
+        canManageMachines={canPickBranch}
         branchId={defaultBranchId}
         branchLabel={data.branch.name}
       />

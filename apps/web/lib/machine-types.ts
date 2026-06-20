@@ -3,6 +3,7 @@ export const MACHINE_CAPEX_CATEGORY_MAP: Record<string, string> = {
   'Mesin Cuci': 'WASHER',
   Pengering: 'DRYER',
   'Setrika & Peralatan': 'IRON',
+  'Setrika Uap': 'IRON',
 };
 
 export const MACHINE_TYPE_OPTIONS = [
@@ -26,7 +27,7 @@ export function resolveMachineTypeFromCategory(category: string): string | null 
   const lower = trimmed.toLowerCase();
   if (lower.includes('mesin cuci') || lower === 'washer') return 'WASHER';
   if (lower.includes('pengering') || lower === 'dryer') return 'DRYER';
-  if (lower.includes('setrika') || lower === 'iron') return 'IRON';
+  if (lower.includes('setrika') || lower === 'iron' || lower.includes('uap')) return 'IRON';
 
   return null;
 }

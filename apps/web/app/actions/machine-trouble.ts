@@ -5,6 +5,11 @@ import { prisma, Role } from '@aww/database';
 import { requireAuth } from '@/lib/session';
 import { createAuditLog } from '@/lib/audit';
 import { createNotification } from '@/lib/notify';
+import { notifyMachineTroubleReported } from '@/lib/machine-notifications';
+import {
+  MACHINE_CONDITION_LABELS,
+  type MachineCondition,
+} from '@/lib/machine-condition';
 
 export type MachineResolutionType = 'REPAIRED' | 'REPLACED';
 
@@ -87,6 +92,125 @@ export async function resolveMachineTrouble(machineId: string, resolution: Machi
   revalidatePath('/owner/audit-trail');
 
   return { ok: true, status: 'IDLE' as const };
+}
+
+export async function setMachineConditionByOwner(machineId: string, condition: MachineCondition) {
+  const session = await requireAuth([Role.OWNER, Role.SUPER_ADMIN]);
+  const label = MACHINE_CONDITION_LABELS[condition];
+  if (!label) throw new Error('Kondisi mesin tidak valid');
+
+  const machine = await prisma.machine.findFirst({
+    where: {
+      id: machineId,
+      branch: { organizationId: session.user.organizationId },
+    },
+    include: { branch: { select: { id: true, name: true } } },
+  });
+  if (!machine) throw new Error('Mesin tidak ditemukan');
+
+  const latestTrouble = await prisma.machineLog.findFirst({
+    where: {
+      machineId,
+      eventType: 'TROUBLE_REPORTED',
+      resolvedAt: null,
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, reportedById: true },
+  });
+
+  if (condition === 'GOOD') {
+    if (machine.status !== 'TROUBLE') {
+      return { ok: true, status: machine.status, condition: 'GOOD' as const };
+    }
+
+    await prisma.$transaction([
+      prisma.machine.update({
+        where: { id: machineId },
+        data: { status: 'IDLE' },
+      }),
+      ...(latestTrouble
+        ? [
+            prisma.machineLog.update({
+              where: { id: latestTrouble.id },
+              data: { resolvedAt: new Date() },
+            }),
+          ]
+        : []),
+      prisma.machineLog.create({
+        data: {
+          machineId,
+          eventType: 'TROUBLE_RESOLVED',
+          reportedById: session.user.id,
+          note: `Owner menandai kondisi: ${label}`,
+        },
+      }),
+    ]);
+
+    await createAuditLog(
+      { organizationId: session.user.organizationId, branchId: machine.branchId, userId: session.user.id },
+      'MACHINE_RESOLVED',
+      'Machine',
+      machineId,
+      { status: 'TROUBLE', condition },
+      { status: 'IDLE', machineName: machine.name }
+    );
+
+    revalidatePath('/worker');
+    return { ok: true, status: 'IDLE' as const, condition: 'GOOD' as const };
+  }
+
+  const note = `Owner menandai kondisi: ${label}`;
+
+  const log = await prisma.$transaction(async (tx) => {
+    await tx.machine.update({
+      where: { id: machineId },
+      data: { status: 'TROUBLE' },
+    });
+
+    if (latestTrouble) {
+      await tx.machineLog.update({
+        where: { id: latestTrouble.id },
+        data: { resolvedAt: new Date() },
+      });
+    }
+
+    return tx.machineLog.create({
+      data: {
+        machineId,
+        eventType: 'TROUBLE_REPORTED',
+        reportedById: session.user.id,
+        note,
+      },
+    });
+  });
+
+  await createAuditLog(
+    { organizationId: session.user.organizationId, branchId: machine.branchId, userId: session.user.id },
+    'MACHINE_TROUBLE_REPORTED',
+    'Machine',
+    machineId,
+    { status: machine.status },
+    { status: 'TROUBLE', condition, note, machineName: machine.name, machineLogId: log.id }
+  );
+
+  void notifyMachineTroubleReported({
+    machineLogId: log.id,
+    machineId,
+    machineName: machine.name,
+    machineType: machine.type,
+    branchId: machine.branchId,
+    branchName: machine.branch.name,
+    note,
+    reportedByName: session.user.name ?? 'Owner',
+    reportedById: session.user.id,
+  }).catch(console.error);
+
+  revalidatePath('/worker');
+  revalidatePath('/owner');
+  revalidatePath('/cashier/inbox');
+  revalidatePath('/owner/audit-trail');
+
+  return { ok: true, status: 'TROUBLE' as const, condition };
 }
 
 export async function replyMachineTrouble(machineLogId: string, body: string) {

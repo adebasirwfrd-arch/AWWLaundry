@@ -78,6 +78,11 @@ enum ExpenseType {
   OPEX
 }
 
+enum BuildingStatus {
+  SEWA
+  BELI
+}
+
 enum AuditAction {
   ORDER_CREATED
   ORDER_STATUS_CHANGED
@@ -468,11 +473,18 @@ model Machine {
   capacityKg      Float?
   status          MachineStatus @default(IDLE)
   lastMaintenance DateTime?
+  expenseId       String?       @unique
+  brand           String?
+  modelType       String?
+  serialNumber    String?
+  productionYear  Int?
+  purchaseYear    Int?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  branch Branch       @relation(fields: [branchId], references: [id])
-  logs   MachineLog[]
+  branch  Branch       @relation(fields: [branchId], references: [id])
+  expense Expense?     @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+  logs    MachineLog[]
 
   @@index([branchId, status])
 }
@@ -583,13 +595,22 @@ model Expense {
   date          DateTime
   dueDate       DateTime?
   proofUrl      String?
+  assetBrand          String?
+  assetModelType      String?
+  assetSerialNumber   String?
+  assetProductionYear Int?
+  assetPurchaseYear   Int?
+  propertyAddress       String?
+  propertyOwnerContact  String?
+  buildingStatus        BuildingStatus?
   reminder3MonthsSentAt DateTime?
   reminder1MonthSentAt  DateTime?
   createdById   String
   createdAt     DateTime       @default(now())
 
-  branch    Branch @relation(fields: [branchId], references: [id])
-  createdBy User   @relation(fields: [createdById], references: [id])
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  createdBy User     @relation(fields: [createdById], references: [id])
+  machine   Machine?
 
   @@index([branchId, type, date])
 }

@@ -3,7 +3,13 @@
 import { revalidatePath } from 'next/cache';
 import { prisma, Role } from '@aww/database';
 import { requireAuth } from '@/lib/session';
-import { isAllowedMachineType } from '@/lib/machine-types';
+import { isAllowedMachineType, MACHINE_TYPE_LABELS } from '@/lib/machine-types';
+import {
+  formatUsageDuration,
+  purchaseDateFromInputs,
+  BUILDING_STATUS_LABELS,
+} from '@/lib/capex-asset';
+import { deriveMachineCondition } from '@/lib/machine-condition';
 
 const BOARD_ROLES = [Role.WORKER, Role.MANAGER, Role.OWNER, Role.SUPER_ADMIN, Role.CASHIER];
 
@@ -139,5 +145,119 @@ export async function createProductionMachine(input: {
     name: machine.name,
     type: machine.type,
     status: machine.status,
+  };
+}
+
+export async function deleteProductionMachine(machineId: string) {
+  const session = await requireAuth([Role.OWNER, Role.SUPER_ADMIN]);
+
+  const machine = await prisma.machine.findFirst({
+    where: {
+      id: machineId,
+      branch: { organizationId: session.user.organizationId },
+    },
+    select: { id: true, name: true, branchId: true },
+  });
+  if (!machine) throw new Error('Mesin tidak ditemukan');
+
+  const logIds = await prisma.machineLog.findMany({
+    where: { machineId },
+    select: { id: true },
+  });
+
+  await prisma.$transaction([
+    ...(logIds.length
+      ? [
+          prisma.machineTroubleComment.deleteMany({
+            where: { machineLogId: { in: logIds.map((l) => l.id) } },
+          }),
+          prisma.machineLog.deleteMany({ where: { machineId } }),
+        ]
+      : []),
+    prisma.machine.delete({ where: { id: machineId } }),
+  ]);
+
+  revalidatePath('/worker');
+  revalidatePath('/owner/cashflow');
+  revalidatePath('/cashier/cashflow');
+
+  return { ok: true, name: machine.name };
+}
+
+export async function getMachineCapexDetail(machineId: string) {
+  const session = await requireAuth([Role.OWNER, Role.SUPER_ADMIN]);
+
+  const machine = await prisma.machine.findFirst({
+    where: {
+      id: machineId,
+      branch: { organizationId: session.user.organizationId },
+    },
+    include: {
+      expense: {
+        include: {
+          branch: { select: { name: true } },
+          createdBy: { select: { name: true } },
+        },
+      },
+    },
+  });
+  if (!machine) throw new Error('Mesin tidak ditemukan');
+
+  const latestTrouble = await prisma.machineLog.findFirst({
+    where: {
+      machineId,
+      eventType: 'TROUBLE_REPORTED',
+      resolvedAt: null,
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { note: true },
+  });
+
+  const expense = machine.expense;
+  const purchaseDate = purchaseDateFromInputs(
+    machine.purchaseYear ?? expense?.assetPurchaseYear,
+    expense?.date ?? machine.createdAt
+  );
+
+  return {
+    machine: {
+      id: machine.id,
+      name: machine.name,
+      type: machine.type,
+      typeLabel: MACHINE_TYPE_LABELS[machine.type] ?? machine.type,
+      status: machine.status,
+      capacityKg: machine.capacityKg,
+      brand: machine.brand ?? expense?.assetBrand ?? null,
+      modelType: machine.modelType ?? expense?.assetModelType ?? null,
+      serialNumber: machine.serialNumber ?? machine.name,
+      productionYear: machine.productionYear ?? expense?.assetProductionYear ?? null,
+      purchaseYear: machine.purchaseYear ?? expense?.assetPurchaseYear ?? null,
+    },
+    expense: expense
+      ? {
+          id: expense.id,
+          category: expense.category,
+          title: expense.title,
+          vendor: expense.vendor,
+          amount: expense.amount,
+          discount: expense.discount,
+          netAmount: expense.netAmount,
+          date: expense.date.toISOString(),
+          dueDate: expense.dueDate?.toISOString() ?? null,
+          description: expense.description,
+          proofUrl: expense.proofUrl,
+          branchName: expense.branch.name,
+          createdBy: expense.createdBy.name,
+          propertyAddress: expense.propertyAddress,
+          propertyOwnerContact: expense.propertyOwnerContact,
+          buildingStatus: expense.buildingStatus
+            ? BUILDING_STATUS_LABELS[expense.buildingStatus]
+            : null,
+        }
+      : null,
+    usageDuration: formatUsageDuration(purchaseDate),
+    purchaseDate: purchaseDate.toISOString(),
+    hasCapexData: !!expense,
+    currentCondition: deriveMachineCondition(machine.status, latestTrouble?.note),
   };
 }

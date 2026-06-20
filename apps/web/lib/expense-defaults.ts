@@ -4,6 +4,7 @@ export const DEFAULT_CAPEX_CATEGORIES = [
   'Sewa Ruko',
   'Mesin Cuci',
   'Pengering',
+  'Setrika Uap',
   'Setrika & Peralatan',
   'Renovasi & Interior',
   'Kendaraan Operasional',

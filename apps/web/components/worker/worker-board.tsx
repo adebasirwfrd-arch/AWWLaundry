@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { ChevronRight, AlertTriangle, X, Filter, Loader2, Wrench, RefreshCw, Plus } from 'lucide-react';
+import { ChevronRight, AlertTriangle, X, Filter, Loader2, Wrench, RefreshCw, Plus, Trash2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { updateOrderStatus, reportMachineTrouble } from '@/app/actions/orders';
-import { resolveMachineTrouble, type MachineResolutionType } from '@/app/actions/machine-trouble';
-import { createProductionMachine, getProductionBoardData } from '@/app/actions/production-board';
+import { resolveMachineTrouble, setMachineConditionByOwner, type MachineResolutionType } from '@/app/actions/machine-trouble';
+import { MACHINE_CONDITION_LABELS, type MachineCondition } from '@/lib/machine-condition';
+import { createProductionMachine, deleteProductionMachine, getMachineCapexDetail, getProductionBoardData } from '@/app/actions/production-board';
+import { MachineCapexDetailModal } from '@/components/worker/machine-capex-detail-modal';
 import { MACHINE_TYPE_OPTIONS } from '@/lib/machine-types';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_FLOW, formatCurrency, formatWeight } from '@aww/shared';
 import { semantic } from '@aww/design-tokens';
@@ -35,7 +37,7 @@ interface WorkerBoardProps {
   machines: Machine[];
   branches: Array<{ id: string; name: string; code?: string }>;
   showBranchFilter: boolean;
-  canResolveMachines?: boolean;
+  canManageMachines?: boolean;
   branchId: string;
   branchLabel: string;
 }
@@ -54,7 +56,7 @@ export function WorkerBoard({
   machines: initialMachines,
   branches,
   showBranchFilter,
-  canResolveMachines = false,
+  canManageMachines = false,
   branchId: initialBranchId,
   branchLabel: initialBranchLabel,
 }: WorkerBoardProps) {
@@ -71,6 +73,11 @@ export function WorkerBoard({
   const [resolving, setResolving] = useState(false);
   const [showAddMachine, setShowAddMachine] = useState(false);
   const [addingMachine, setAddingMachine] = useState(false);
+  const [deletingMachineId, setDeletingMachineId] = useState<string | null>(null);
+  const [capexDetailMachine, setCapexDetailMachine] = useState<Machine | null>(null);
+  const [capexDetail, setCapexDetail] = useState<Awaited<ReturnType<typeof getMachineCapexDetail>> | null>(null);
+  const [loadingCapexDetail, setLoadingCapexDetail] = useState(false);
+  const [savingCondition, setSavingCondition] = useState(false);
   const [addMachineForm, setAddMachineForm] = useState({
     serialNumber: '',
     type: 'WASHER',
@@ -136,15 +143,65 @@ export function WorkerBoard({
   }
 
   function handleMachineClick(machine: Machine) {
-    if (machine.status === 'TROUBLE' && canResolveMachines) {
+    if (machine.status === 'TROUBLE' && canManageMachines) {
       setResolveMachine(machine);
       setReportMachine(null);
+      setCapexDetailMachine(null);
+      return;
+    }
+    if (canManageMachines && machine.status !== 'TROUBLE') {
+      void openCapexDetail(machine);
       return;
     }
     if (machine.status !== 'TROUBLE') {
       setReportMachine(machine);
       setReportNote('');
       setResolveMachine(null);
+    }
+  }
+
+  async function openCapexDetail(machine: Machine) {
+    setCapexDetailMachine(machine);
+    setCapexDetail(null);
+    setLoadingCapexDetail(true);
+    setReportMachine(null);
+    setResolveMachine(null);
+    try {
+      const detail = await getMachineCapexDetail(machine.id);
+      setCapexDetail(detail);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Gagal memuat detail mesin');
+      setCapexDetailMachine(null);
+    } finally {
+      setLoadingCapexDetail(false);
+    }
+  }
+
+  async function submitMachineCondition(condition: MachineCondition) {
+    if (!capexDetailMachine) return;
+    setSavingCondition(true);
+    try {
+      const result = await setMachineConditionByOwner(capexDetailMachine.id, condition);
+      setMachines((prev) =>
+        prev.map((m) =>
+          m.id === capexDetailMachine.id ? { ...m, status: result.status } : m
+        )
+      );
+
+      if (condition === 'GOOD') {
+        setCapexDetail((prev) => (prev ? { ...prev, currentCondition: 'GOOD' } : prev));
+        toast.success(`${capexDetailMachine.name} ditandai kondisi bagus`);
+      } else {
+        setCapexDetailMachine(null);
+        setCapexDetail(null);
+        toast.success(
+          `${capexDetailMachine.name} ditandai ${MACHINE_CONDITION_LABELS[condition]} — status merah di board`
+        );
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Gagal menyimpan kondisi mesin');
+    } finally {
+      setSavingCondition(false);
     }
   }
 
@@ -168,6 +225,22 @@ export function WorkerBoard({
       toast.error(e instanceof Error ? e.message : 'Gagal melaporkan gangguan');
     } finally {
       setReporting(false);
+    }
+  }
+
+  async function removeMachine(machine: Machine) {
+    if (!canManageMachines) return;
+    if (!confirm(`Hapus unit mesin "${machine.name}" dari board produksi?`)) return;
+
+    setDeletingMachineId(machine.id);
+    try {
+      await deleteProductionMachine(machine.id);
+      setMachines((prev) => prev.filter((m) => m.id !== machine.id));
+      toast.success(`Unit ${machine.name} dihapus`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Gagal menghapus mesin');
+    } finally {
+      setDeletingMachineId(null);
     }
   }
 
@@ -234,7 +307,7 @@ export function WorkerBoard({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-display text-lg font-bold text-brand-navy">Unit Mesin</h2>
-        {canResolveMachines && (
+        {canManageMachines && (
           <Button
             size="sm"
             variant="rainbow"
@@ -261,11 +334,29 @@ export function WorkerBoard({
               <div>
                 <p className="font-semibold text-brand-navy">{m.name}</p>
                 <p className="text-xs text-brand-navy/50">{m.type}</p>
-                {m.status === 'TROUBLE' && canResolveMachines && (
+                {m.status === 'TROUBLE' && canManageMachines && (
                   <p className="mt-1 text-[10px] font-medium text-red-600">Klik → diperbaiki / diganti</p>
                 )}
               </div>
               <div className="flex items-center gap-2">
+                {canManageMachines && (
+                  <button
+                    type="button"
+                    className="rounded-lg p-1.5 text-brand-navy/35 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                    disabled={deletingMachineId === m.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void removeMachine(m);
+                    }}
+                    aria-label={`Hapus mesin ${m.name}`}
+                  >
+                    {deletingMachineId === m.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </button>
+                )}
                 <span
                   className={`h-3 w-3 rounded-full ${
                     m.status === 'TROUBLE'
@@ -284,8 +375,8 @@ export function WorkerBoard({
         ))}
       </div>
       <p className="text-xs text-brand-navy/45">
-        {canResolveMachines
-          ? 'Klik mesin hijau/biru untuk lapor gangguan. Klik mesin merah untuk tandai diperbaiki atau diganti.'
+        {canManageMachines
+          ? 'Klik mesin hijau/biru untuk lihat detail & ubah kondisi. Klik mesin merah untuk tandai diperbaiki atau diganti.'
           : 'Klik kartu mesin untuk melaporkan kerusakan atau masalah.'}
       </p>
 
@@ -331,6 +422,19 @@ export function WorkerBoard({
           );
         })}
       </div>
+
+      {capexDetailMachine && (
+        <MachineCapexDetailModal
+          detail={capexDetail}
+          loading={loadingCapexDetail}
+          saving={savingCondition}
+          onClose={() => {
+            setCapexDetailMachine(null);
+            setCapexDetail(null);
+          }}
+          onSaveCondition={submitMachineCondition}
+        />
+      )}
 
       {showAddMachine && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-navy/40 p-4 backdrop-blur-sm">
