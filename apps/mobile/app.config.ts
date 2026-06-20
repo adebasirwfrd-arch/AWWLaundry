@@ -34,6 +34,7 @@ const config: ExpoConfig = {
     },
     appUrl: process.env.EXPO_PUBLIC_APP_URL ?? 'https://aww-laundry.vercel.app',
   },
+  plugins: ['expo-asset', 'expo-font'],
   owner: 'adebasir78',
 };
 

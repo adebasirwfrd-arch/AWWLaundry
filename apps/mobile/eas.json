@@ -14,7 +14,8 @@
     "preview": {
       "distribution": "internal",
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "image": "latest"
       },
       "env": {
         "EXPO_PUBLIC_APP_URL": "https://aww-laundry.vercel.app"
@@ -22,7 +23,8 @@
     },
     "production": {
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "app-bundle",
+        "image": "latest"
       },
       "env": {
         "EXPO_PUBLIC_APP_URL": "https://aww-laundry.vercel.app"
