@@ -179,7 +179,8 @@ html.native-app video {
   height: auto;
 }
 
-/* Customer: nav horizontal ringkas di landscape */
-html.native-app.native-landscape [data-customer-landscape-nav] {
-  display: flex !important;
+/* Panel notifikasi — portal fixed, tidak terpotong overflow:hidden dashboard */
+html.native-app [data-notification-panel] {
+  z-index: 10050 !important;
+  -webkit-overflow-scrolling: touch;
 }
