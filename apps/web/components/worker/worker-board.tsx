@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { ChevronRight, AlertTriangle, X, Filter, Loader2 } from 'lucide-react';
+import { ChevronRight, AlertTriangle, X, Filter, Loader2, Wrench, RefreshCw } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { updateOrderStatus, reportMachineTrouble } from '@/app/actions/orders';
+import { resolveMachineTrouble, type MachineResolutionType } from '@/app/actions/machine-trouble';
 import { getProductionBoardData } from '@/app/actions/production-board';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_FLOW, formatCurrency, formatWeight } from '@aww/shared';
 import { semantic } from '@aww/design-tokens';
@@ -32,6 +33,7 @@ interface WorkerBoardProps {
   machines: Machine[];
   branches: Array<{ id: string; name: string; code?: string }>;
   showBranchFilter: boolean;
+  canResolveMachines?: boolean;
   branchId: string;
   branchLabel: string;
 }
@@ -50,6 +52,7 @@ export function WorkerBoard({
   machines: initialMachines,
   branches,
   showBranchFilter,
+  canResolveMachines = false,
   branchId: initialBranchId,
   branchLabel: initialBranchLabel,
 }: WorkerBoardProps) {
@@ -60,8 +63,10 @@ export function WorkerBoard({
   const [isPending, startTransition] = useTransition();
   const [loadingBranch, setLoadingBranch] = useState(false);
   const [reportMachine, setReportMachine] = useState<Machine | null>(null);
+  const [resolveMachine, setResolveMachine] = useState<Machine | null>(null);
   const [reportNote, setReportNote] = useState('');
   const [reporting, setReporting] = useState(false);
+  const [resolving, setResolving] = useState(false);
 
   function changeBranch(nextBranchId: string) {
     if (nextBranchId === branchId) return;
@@ -74,6 +79,7 @@ export function WorkerBoard({
         setBranchId(nextBranchId);
         setBranchLabel(data.branch.name);
         setReportMachine(null);
+        setResolveMachine(null);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Gagal memuat data cabang');
       } finally {
@@ -97,6 +103,40 @@ export function WorkerBoard({
         toast.error('Gagal update status — dikembalikan');
       }
     });
+  }
+
+  async function submitResolve(resolution: MachineResolutionType) {
+    if (!resolveMachine) return;
+    setResolving(true);
+    try {
+      await resolveMachineTrouble(resolveMachine.id, resolution);
+      setMachines((prev) =>
+        prev.map((m) => (m.id === resolveMachine.id ? { ...m, status: 'IDLE' } : m))
+      );
+      setResolveMachine(null);
+      toast.success(
+        resolution === 'REPAIRED'
+          ? `${resolveMachine.name} ditandai diperbaiki — aktif kembali`
+          : `${resolveMachine.name} ditandai diganti — aktif kembali`
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Gagal memperbarui status mesin');
+    } finally {
+      setResolving(false);
+    }
+  }
+
+  function handleMachineClick(machine: Machine) {
+    if (machine.status === 'TROUBLE' && canResolveMachines) {
+      setResolveMachine(machine);
+      setReportMachine(null);
+      return;
+    }
+    if (machine.status !== 'TROUBLE') {
+      setReportMachine(machine);
+      setReportNote('');
+      setResolveMachine(null);
+    }
   }
 
   async function submitTroubleReport() {
@@ -162,17 +202,15 @@ export function WorkerBoard({
             className={`cursor-pointer transition hover:shadow-aww-md ${
               m.status === 'TROUBLE' ? 'border-red-400 bg-red-50' : ''
             }`}
-            onClick={() => {
-              if (m.status !== 'TROUBLE') {
-                setReportMachine(m);
-                setReportNote('');
-              }
-            }}
+            onClick={() => handleMachineClick(m)}
           >
             <CardContent className="flex items-center justify-between p-4">
               <div>
                 <p className="font-semibold text-brand-navy">{m.name}</p>
                 <p className="text-xs text-brand-navy/50">{m.type}</p>
+                {m.status === 'TROUBLE' && canResolveMachines && (
+                  <p className="mt-1 text-[10px] font-medium text-red-600">Klik → diperbaiki / diganti</p>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <span
@@ -192,7 +230,11 @@ export function WorkerBoard({
           </Card>
         ))}
       </div>
-      <p className="text-xs text-brand-navy/45">Klik kartu mesin untuk melaporkan kerusakan atau masalah.</p>
+      <p className="text-xs text-brand-navy/45">
+        {canResolveMachines
+          ? 'Klik mesin hijau/biru untuk lapor gangguan. Klik mesin merah untuk tandai diperbaiki atau diganti.'
+          : 'Klik kartu mesin untuk melaporkan kerusakan atau masalah.'}
+      </p>
 
       <div className="-mx-4 flex gap-4 overflow-x-auto overscroll-x-contain px-4 pb-2 snap-x snap-mandatory lg:mx-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:px-0 lg:pb-0 xl:grid-cols-6">
         {columns.map((status) => {
@@ -236,6 +278,56 @@ export function WorkerBoard({
           );
         })}
       </div>
+
+      {resolveMachine && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-navy/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-aww-lg">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-display text-lg font-bold text-brand-navy">Mesin Bermasalah</h3>
+                <p className="text-sm text-brand-navy/60">
+                  {resolveMachine.name} · {resolveMachine.type}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setResolveMachine(null)}
+                className="rounded-full p-1 text-brand-navy/45 hover:bg-brand-navy/5"
+                aria-label="Tutup"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="mb-4 text-sm text-brand-navy/70">
+              Tandai mesin sudah ditangani agar status kembali <strong>aktif (hijau)</strong>.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Button
+                className="h-auto flex-col gap-2 py-4"
+                onClick={() => void submitResolve('REPAIRED')}
+                disabled={resolving}
+              >
+                <Wrench className="h-5 w-5" />
+                <span>Diperbaiki</span>
+              </Button>
+              <Button
+                variant="secondary"
+                className="h-auto flex-col gap-2 py-4"
+                onClick={() => void submitResolve('REPLACED')}
+                disabled={resolving}
+              >
+                <RefreshCw className="h-5 w-5" />
+                <span>Diganti</span>
+              </Button>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <Button variant="secondary" onClick={() => setResolveMachine(null)} disabled={resolving}>
+                Batal
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {reportMachine && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-navy/40 p-4 backdrop-blur-sm">
