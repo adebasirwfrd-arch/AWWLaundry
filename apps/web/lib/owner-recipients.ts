@@ -1,11 +1,10 @@
 import { prisma, Role } from '@aww/database';
-import { getOwnerNotificationEmail } from '@/lib/env';
 
-/** Email owner untuk semua notifikasi laporan & alert — hardcoded fallback. */
-const HARDCODED_OWNER_EMAIL = 'ade.basirwfrd@gmail.com';
+/** Email penerima laporan cashflow & notifikasi owner — selalu hardcoded. */
+export const CASHFLOW_REPORT_RECIPIENT = 'ade.basirwfrd@gmail.com';
 
 export function getHardcodedOwnerEmail() {
-  return getOwnerNotificationEmail() || HARDCODED_OWNER_EMAIL;
+  return CASHFLOW_REPORT_RECIPIENT;
 }
 
 export async function getOwnerRecipients(organizationId: string) {
