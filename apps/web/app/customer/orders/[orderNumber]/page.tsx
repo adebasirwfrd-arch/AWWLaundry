@@ -3,6 +3,7 @@ import { prisma, Role } from '@aww/database';
 import { requireAuth } from '@/lib/session';
 import { CustomerOrderDetail } from '@/components/customer/customer-order-detail';
 import { parseCustomerPaymentFromNotes } from '@/lib/payment-plan';
+import { resolveCustomerPaymentProofs, resolveOrderPaymentProofs } from '@/lib/payment-proof-url';
 
 export default async function CustomerOrderDetailPage({
   params,
@@ -34,6 +35,9 @@ export default async function CustomerOrderDetailPage({
 
   if (!order) notFound();
 
+  const customerPayment = await resolveCustomerPaymentProofs(parseCustomerPaymentFromNotes(order.notes));
+  const payments = await resolveOrderPaymentProofs(order.payments, order.notes);
+
   return (
     <CustomerOrderDetail
       order={{
@@ -60,8 +64,8 @@ export default async function CustomerOrderDetailPage({
           : null,
         paid: order.paymentStatus === 'PAID',
         paymentStatus: order.paymentStatus,
-        customerPayment: parseCustomerPaymentFromNotes(order.notes),
-        payments: order.payments.map((p) => ({
+        customerPayment,
+        payments: payments.map((p) => ({
           method: p.method,
           amount: p.amount,
           proofUrl: p.proofUrl,

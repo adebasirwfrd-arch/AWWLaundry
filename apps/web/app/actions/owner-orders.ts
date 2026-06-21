@@ -6,6 +6,7 @@ import {
   buildOrderListWhere,
   type OrderListFilters,
 } from '@/lib/order-filters';
+import { resolveOrderPaymentProofs } from '@/lib/payment-proof-url';
 
 const VIEW_ROLES = [Role.OWNER, Role.SUPER_ADMIN, Role.MANAGER];
 
@@ -103,6 +104,17 @@ export async function getOrderDetailForStaff(orderId: string) {
 
   if (!order) return null;
 
+  const payments = await resolveOrderPaymentProofs(
+    order.payments.map((p) => ({
+      method: p.method,
+      amount: p.amount,
+      paidAt: p.paidAt.toISOString(),
+      proofUrl: p.proofUrl,
+      receivedBy: p.receivedBy.name,
+    })),
+    order.notes
+  );
+
   return {
     id: order.id,
     orderNumber: order.orderNumber,
@@ -130,13 +142,7 @@ export async function getOrderDetailForStaff(orderId: string) {
       unitPrice: i.unitPrice,
       total: i.total,
     })),
-    payments: order.payments.map((p) => ({
-      method: p.method,
-      amount: p.amount,
-      paidAt: p.paidAt.toISOString(),
-      proofUrl: p.proofUrl,
-      receivedBy: p.receivedBy.name,
-    })),
+    payments,
     statusLogs: order.statusLogs.map((l) => ({
       toStatus: l.toStatus,
       note: l.note,

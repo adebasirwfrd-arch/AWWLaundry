@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import { Check, X, Package, Clock, ShoppingBag, Scale, CreditCard, Layers, Hourglass } from 'lucide-react';
+import { Check, X, Package, Clock, ShoppingBag, Scale, CreditCard, Layers, Hourglass, ImageIcon, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
 import {
   formatCurrency,
   PAYMENT_METHOD_LABELS,
@@ -56,6 +56,49 @@ const defaultCombination: CombinationFormState = {
   remainingTiming: 'LATER',
 };
 
+function getDisplayPaymentPlan(o: PendingOrder): CombinationPaymentInput | null {
+  if (o.paymentPlan) return o.paymentPlan;
+  if (o.customerPayment?.mode === 'COMBINATION' && o.customerPayment.combination) {
+    return o.customerPayment.combination;
+  }
+  return null;
+}
+
+function getPaidAmount(o: PendingOrder) {
+  return o.payments.reduce((s, p) => s + p.amount, 0);
+}
+
+function getInboxPaymentBadge(o: PendingOrder) {
+  const paid = getPaidAmount(o);
+  const plan = getDisplayPaymentPlan(o);
+  const isCombination = o.customerPayment?.mode === 'COMBINATION' || !!plan;
+
+  if (o.customerPayment?.mode === 'PAY_LATER') {
+    return { text: 'Bayar nanti · perlu konfirmasi', tone: 'later' as const };
+  }
+  if (paid > 0 && paid < o.total) {
+    return {
+      text: `DP ${formatCurrency(paid)} · sisa ${formatCurrency(o.total - paid)}`,
+      tone: 'dp' as const,
+    };
+  }
+  if (paid > 0) {
+    return { text: 'Bayar via app · perlu konfirmasi', tone: 'paid' as const };
+  }
+  if (isCombination && plan) {
+    return { text: `Kombinasi DP · ${formatCurrency(plan.dpAmount)}`, tone: 'plan' as const };
+  }
+  return { text: 'Belum diterima · Belum bayar', tone: 'pending' as const };
+}
+
+const BADGE_TONE_CLASS = {
+  later: 'bg-rainbow-orange/20 text-rainbow-orange',
+  dp: 'bg-rainbow-purple/20 text-rainbow-purple',
+  paid: 'bg-rainbow-green/20 text-rainbow-green',
+  plan: 'bg-rainbow-purple/20 text-rainbow-purple',
+  pending: 'bg-amber-400/20 text-amber-700',
+} as const;
+
 export function PendingOrders({ orders }: { orders: PendingOrder[] }) {
   const [list, setList] = useState(orders);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -89,9 +132,7 @@ export function PendingOrders({ orders }: { orders: PendingOrder[] }) {
   const hasPresetPlan = !!(expanded?.paymentPlan);
 
   function applyPaymentPlan(o: PendingOrder) {
-    if (o.payments.length > 0) return;
-
-    const plan = o.paymentPlan;
+    const plan = getDisplayPaymentPlan(o);
     if (plan) {
       setPaymentMode('COMBINATION');
       setCombination({
@@ -102,6 +143,8 @@ export function PendingOrders({ orders }: { orders: PendingOrder[] }) {
       });
       return;
     }
+
+    if (o.payments.length > 0) return;
 
     if (o.customerPayment?.mode === 'CASH') {
       setPaymentMode('SINGLE');
@@ -143,6 +186,11 @@ export function PendingOrders({ orders }: { orders: PendingOrder[] }) {
     setRemainingProofUrl(null);
     setRemainingProofPreview(null);
     applyPaymentPlan(o);
+  }
+
+  function toggleOrder(o: PendingOrder) {
+    if (expandedId === o.id) setExpandedId(null);
+    else openConfirm(o);
   }
 
   function selectPaymentOption(value: ConfirmPaymentMethod | 'COMBINATION') {
@@ -277,73 +325,97 @@ export function PendingOrders({ orders }: { orders: PendingOrder[] }) {
 
   return (
     <div className="space-y-3">
-      {list.map((o) => (
+      {list.map((o) => {
+        const badge = getInboxPaymentBadge(o);
+        const plan = getDisplayPaymentPlan(o);
+        const paidAmount = getPaidAmount(o);
+        const isExpanded = expandedId === o.id;
+
+        return (
         <div key={o.id} className="rounded-3xl border border-amber-200 bg-amber-50/60 p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-400 text-white">
-                <Package className="h-5 w-5" />
+          <button
+            type="button"
+            onClick={() => toggleOrder(o)}
+            className="w-full text-left transition-opacity hover:opacity-95"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-400 text-white">
+                  <Package className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="font-semibold text-brand-navy">{o.customerName}</p>
+                  <p className="font-mono text-[11px] text-brand-navy/45">{o.orderNumber}</p>
+                </div>
               </div>
-              <div>
-                <p className="font-semibold text-brand-navy">{o.customerName}</p>
-                <p className="font-mono text-[11px] text-brand-navy/45">{o.orderNumber}</p>
+              <div className="flex flex-col items-end gap-1">
+                <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${BADGE_TONE_CLASS[badge.tone]}`}>
+                  {badge.text}
+                </span>
+                {isExpanded ? (
+                  <ChevronUp className="h-4 w-4 text-brand-navy/40" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-brand-navy/40" />
+                )}
               </div>
             </div>
-            <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-              o.payments.length > 0
-                ? 'bg-rainbow-green/20 text-rainbow-green'
-                : o.customerPayment?.mode === 'PAY_LATER'
-                  ? 'bg-rainbow-orange/20 text-rainbow-orange'
-                  : 'bg-amber-400/20 text-amber-700'
-            }`}>
-              {o.payments.length > 0
-                ? 'Bayar via app · perlu konfirmasi'
-                : o.customerPayment?.mode === 'PAY_LATER'
-                  ? 'Bayar nanti · perlu konfirmasi'
-                  : 'Belum diterima · Belum bayar'}
-            </span>
-          </div>
 
-          {o.customerPayment?.mode === 'PAY_LATER' && (
-            <div className="mt-2 flex items-center gap-2 rounded-xl bg-rainbow-orange/10 px-3 py-2 text-xs text-brand-navy">
-              <Hourglass className="h-3.5 w-3.5 text-rainbow-orange" />
-              Pelanggan pilih bayar nanti — konfirmasi setelah cucian diterima, bayar saat selesai
-            </div>
-          )}
-
-          {o.paymentPlan && (
-            <div className="mt-2 flex items-center gap-2 rounded-xl bg-rainbow-purple/10 px-3 py-2 text-xs text-brand-navy">
-              <Layers className="h-3.5 w-3.5 text-rainbow-purple" />
-              Rencana bayar: DP {PAYMENT_METHOD_LABELS[o.paymentPlan.dpMethod]} {formatCurrency(o.paymentPlan.dpAmount)}
-              {' · '}sisa via {PAYMENT_METHOD_LABELS[o.paymentPlan.remainingMethod]}
-              {o.paymentPlan.remainingTiming === 'LATER' ? ' (nanti)' : ' (sekarang)'}
-            </div>
-          )}
-
-          <div className="mt-3 rounded-2xl bg-white/70 p-3 text-sm">
-            <p className="font-medium text-brand-navy">{o.serviceName}</p>
-            {o.isKiloan ? (
-              <p className="mt-1 flex items-center gap-1 text-xs text-brand-navy/55">
-                <Scale className="h-3.5 w-3.5" /> Estimasi {o.weightKg || '?'} kg · {formatCurrency(o.pricePerKg)}/kg
-              </p>
-            ) : (
-              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-brand-navy/55">
-                {o.items.map((it, i) => (
-                  <span key={i}>{it.qty}× {it.description.replace(/\s*\(.*\)$/, '')}</span>
-                ))}
+            {o.customerPayment?.mode === 'PAY_LATER' && (
+              <div className="mt-2 flex items-center gap-2 rounded-xl bg-rainbow-orange/10 px-3 py-2 text-xs text-brand-navy">
+                <Hourglass className="h-3.5 w-3.5 text-rainbow-orange" />
+                Pelanggan pilih bayar nanti — konfirmasi setelah cucian diterima, bayar saat selesai
               </div>
             )}
-          </div>
 
-          <div className="mt-3 flex items-center justify-between">
-            <div className="flex items-center gap-4 text-xs text-brand-navy/55">
-              <span className="flex items-center gap-1"><ShoppingBag className="h-3.5 w-3.5" /> {o.isKiloan ? 'Kiloan' : `${o.itemCount} item`}</span>
-              <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {new Date(o.createdAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}</span>
+            {plan && (
+              <div className="mt-2 flex items-center gap-2 rounded-xl bg-rainbow-purple/10 px-3 py-2 text-xs text-brand-navy">
+                <Layers className="h-3.5 w-3.5 text-rainbow-purple" />
+                {paidAmount > 0 ? (
+                  <>
+                    DP {PAYMENT_METHOD_LABELS[plan.dpMethod]} {formatCurrency(paidAmount)} sudah masuk
+                    {' · '}sisa {formatCurrency(Math.max(0, o.total - paidAmount))} via{' '}
+                    {PAYMENT_METHOD_LABELS[plan.remainingMethod]}
+                    {plan.remainingTiming === 'LATER' ? ' (nanti)' : ' (sekarang)'}
+                  </>
+                ) : (
+                  <>
+                    Rencana bayar: DP {PAYMENT_METHOD_LABELS[plan.dpMethod]} {formatCurrency(plan.dpAmount)}
+                    {' · '}sisa via {PAYMENT_METHOD_LABELS[plan.remainingMethod]}
+                    {plan.remainingTiming === 'LATER' ? ' (nanti)' : ' (sekarang)'}
+                  </>
+                )}
+              </div>
+            )}
+
+            <div className="mt-3 rounded-2xl bg-white/70 p-3 text-sm">
+              <p className="font-medium text-brand-navy">{o.serviceName}</p>
+              {o.isKiloan ? (
+                <p className="mt-1 flex items-center gap-1 text-xs text-brand-navy/55">
+                  <Scale className="h-3.5 w-3.5" /> Estimasi {o.weightKg || '?'} kg · {formatCurrency(o.pricePerKg)}/kg
+                </p>
+              ) : (
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-brand-navy/55">
+                  {o.items.map((it, i) => (
+                    <span key={i}>{it.qty}× {it.description.replace(/\s*\(.*\)$/, '')}</span>
+                  ))}
+                </div>
+              )}
             </div>
-            <p className="font-display text-base font-bold text-brand-orange">{formatCurrency(o.total)}</p>
-          </div>
 
-          {expandedId === o.id ? (
+            <div className="mt-3 flex items-center justify-between">
+              <div className="flex items-center gap-4 text-xs text-brand-navy/55">
+                <span className="flex items-center gap-1"><ShoppingBag className="h-3.5 w-3.5" /> {o.isKiloan ? 'Kiloan' : `${o.itemCount} item`}</span>
+                <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {new Date(o.createdAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}</span>
+              </div>
+              <p className="font-display text-base font-bold text-brand-orange">{formatCurrency(o.total)}</p>
+            </div>
+
+            {!isExpanded && (
+              <p className="mt-2 text-center text-[11px] text-brand-navy/45">Ketuk kartu untuk detail & bukti bayar</p>
+            )}
+          </button>
+
+          {isExpanded ? (
             <div className="mt-4 space-y-4 rounded-2xl border border-brand-navy/10 bg-white p-4">
               <p className="flex items-center gap-2 text-sm font-semibold text-brand-navy">
                 <CreditCard className="h-4 w-4 text-rainbow-cyan" /> Verifikasi & Pembayaran
@@ -364,24 +436,30 @@ export function PendingOrders({ orders }: { orders: PendingOrder[] }) {
               )}
 
               {o.payments.length > 0 ? (
-                <div className="rounded-xl border border-rainbow-green/25 bg-rainbow-green/5 p-4">
-                  <p className="text-sm font-semibold text-brand-navy">Pembayaran sudah dilakukan via aplikasi</p>
-                  <div className="mt-2 space-y-1 text-sm">
-                    {o.payments.map((p, i) => (
-                      <div key={i} className="flex justify-between text-brand-navy/75">
-                        <span>{PAYMENT_METHOD_LABELS[p.method] ?? p.method}</span>
-                        <span className="font-semibold">{formatCurrency(p.amount)}</span>
-                      </div>
-                    ))}
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-rainbow-green/25 bg-rainbow-green/5 p-4">
+                    <p className="text-sm font-semibold text-brand-navy">Pembayaran sudah dilakukan via aplikasi</p>
+                    <div className="mt-2 space-y-1 text-sm">
+                      {o.payments.map((p, i) => (
+                        <div key={i} className="flex justify-between text-brand-navy/75">
+                          <span>{PAYMENT_METHOD_LABELS[p.method] ?? p.method}</span>
+                          <span className="font-semibold">{formatCurrency(p.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {o.customerPayment && (
+                      <p className="mt-2 text-xs text-brand-navy/55">
+                        Metode: {CUSTOMER_PAYMENT_MODE_LABELS[o.customerPayment.mode]}
+                      </p>
+                    )}
+                    {paidAmount > 0 && paidAmount < o.total && (
+                      <p className="mt-2 text-sm font-medium text-amber-700">
+                        Sisa tagihan: {formatCurrency(o.total - paidAmount)} · bayar setelah cucian selesai
+                      </p>
+                    )}
                   </div>
-                  {o.customerPayment && (
-                    <p className="mt-2 text-xs text-brand-navy/55">
-                      Metode: {CUSTOMER_PAYMENT_MODE_LABELS[o.customerPayment.mode]}
-                    </p>
-                  )}
-                  <p className="mt-2 text-xs text-brand-navy/55">
-                    Verifikasi berat/total — bukti bayar ada di detail pesanan.
-                  </p>
+
+                  <PendingOrderProofGallery payments={o.payments} customerPayment={o.customerPayment} />
                 </div>
               ) : o.customerPayment?.mode === 'PAY_LATER' ? (
                 <div className="rounded-xl border border-rainbow-orange/25 bg-rainbow-orange/5 p-4">
@@ -490,6 +568,15 @@ export function PendingOrders({ orders }: { orders: PendingOrder[] }) {
                     </div>
                     <p className="mt-1 text-xs text-brand-navy/45">Total order: {formatCurrency(computedTotal)}</p>
                   </>
+                ) : o.payments.length > 0 && paidAmount > 0 && paidAmount < computedTotal ? (
+                  <>
+                    <p className="text-xs text-brand-navy/50">DP via app · Sisa nanti</p>
+                    <div className="mt-1 flex justify-center gap-4 text-sm">
+                      <span>DP: <strong className="text-brand-orange">{formatCurrency(paidAmount)}</strong></span>
+                      <span>Sisa: <strong className="text-amber-700">{formatCurrency(computedTotal - paidAmount)}</strong></span>
+                    </div>
+                    <p className="mt-1 text-xs text-brand-navy/45">Total setelah timbang: {formatCurrency(computedTotal)}</p>
+                  </>
                 ) : (
                   <>
                     <p className="text-xs text-brand-navy/50">
@@ -539,12 +626,104 @@ export function PendingOrders({ orders }: { orders: PendingOrder[] }) {
                 disabled={pending && busyId === o.id}
                 className="flex flex-[2] items-center justify-center gap-1.5 rounded-xl bg-aww-payment px-3 py-2.5 text-sm font-semibold text-white shadow-aww-glow-rainbow transition-transform hover:scale-[1.02] disabled:opacity-50"
               >
-                <Check className="h-4 w-4" /> Verifikasi & Bayar
+                <Check className="h-4 w-4" /> Verifikasi & Konfirmasi
               </button>
             </div>
           )}
         </div>
-      ))}
+        );
+      })}
     </div>
+  );
+}
+
+function PendingOrderProofGallery({
+  payments,
+  customerPayment,
+}: {
+  payments: { method: string; amount: number; proofUrl?: string | null }[];
+  customerPayment?: CustomerOrderPaymentInput | null;
+}) {
+  const [lightbox, setLightbox] = useState<string | null>(null);
+
+  const proofItems = useMemo(() => {
+    const items: Array<{ method: string; amount: number; proofUrl: string }> = [];
+    for (const p of payments) {
+      if (p.proofUrl) items.push({ method: p.method, amount: p.amount, proofUrl: p.proofUrl });
+    }
+    if (customerPayment?.mode === 'COMBINATION' && customerPayment.combination) {
+      const cp = customerPayment.combination;
+      if (cp.dpProofUrl && !items.some((i) => i.proofUrl === cp.dpProofUrl)) {
+        items.unshift({
+          method: cp.dpMethod,
+          amount: payments[0]?.amount ?? cp.dpAmount,
+          proofUrl: cp.dpProofUrl,
+        });
+      }
+    }
+    if (
+      (customerPayment?.mode === 'QRIS' || customerPayment?.mode === 'BANK_TRANSFER') &&
+      customerPayment.proofUrl &&
+      items.length === 0
+    ) {
+      items.push({
+        method: customerPayment.mode,
+        amount: payments[0]?.amount ?? 0,
+        proofUrl: customerPayment.proofUrl,
+      });
+    }
+    return items;
+  }, [payments, customerPayment]);
+
+  if (proofItems.length === 0) {
+    return (
+      <p className="rounded-xl bg-brand-sky/10 px-3 py-2 text-xs text-brand-navy/60">
+        Belum ada foto bukti pembayaran tercatat untuk pesanan ini.
+      </p>
+    );
+  }
+
+  return (
+    <>
+      <div className="rounded-xl border border-rainbow-cyan/20 bg-brand-sky/5 p-4">
+        <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-brand-navy">
+          <ImageIcon className="h-4 w-4 text-rainbow-cyan" /> Bukti Pembayaran Pelanggan
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {proofItems.map((p, i) => (
+            <div key={i} className="overflow-hidden rounded-xl border border-brand-navy/10 bg-white">
+              <div className="flex items-center justify-between border-b border-brand-navy/8 px-3 py-2 text-xs">
+                <span>{PAYMENT_METHOD_LABELS[p.method] ?? p.method} · {formatCurrency(p.amount)}</span>
+                <div className="flex gap-1">
+                  <button type="button" onClick={() => setLightbox(p.proofUrl)} className="text-brand-navy/50">
+                    <ImageIcon className="h-4 w-4" />
+                  </button>
+                  <a href={p.proofUrl} target="_blank" rel="noopener noreferrer" className="text-brand-navy/50">
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                </div>
+              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={p.proofUrl}
+                alt="Bukti pembayaran"
+                className="max-h-56 w-full cursor-pointer bg-brand-navy/3 object-contain"
+                onClick={() => setLightbox(p.proofUrl)}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {lightbox && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setLightbox(null)}>
+          <button type="button" onClick={() => setLightbox(null)} className="absolute right-4 top-4 rounded-full bg-white/20 p-2 text-white">
+            <X className="h-6 w-6" />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={lightbox} alt="Bukti" className="max-h-[90vh] max-w-full rounded-xl" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
+    </>
   );
 }

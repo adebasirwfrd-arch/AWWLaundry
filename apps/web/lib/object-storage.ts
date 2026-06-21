@@ -32,6 +32,45 @@ export async function storeUploadedFile(input: {
   return data.publicUrl;
 }
 
+/** Ambil path file di bucket dari URL publik/sign Supabase atau path relatif. */
+export function parseStoragePathFromUrl(storedUrl: string): string | null {
+  if (!storedUrl || storedUrl.startsWith('blob:') || storedUrl.startsWith('data:')) return null;
+  if (!storedUrl.includes('://')) {
+    return storedUrl.replace(/^\/+/, '');
+  }
+  try {
+    const u = new URL(storedUrl);
+    const match = u.pathname.match(/\/storage\/v1\/object\/(?:public|sign|authenticated)\/[^/]+\/(.+)$/);
+    if (!match?.[1]) return null;
+    return decodeURIComponent(match[1].split('?')[0] ?? match[1]);
+  } catch {
+    return null;
+  }
+}
+
+/** URL publik Supabase sering 403 jika bucket private — pakai signed URL untuk tampilan. */
+export async function resolveStorageUrl(
+  storedUrl: string | null | undefined,
+  expiresIn = 3600
+): Promise<string | null> {
+  if (!storedUrl) return null;
+  if (storedUrl.startsWith('blob:') || storedUrl.startsWith('data:')) return null;
+  if (!isSupabaseStorageConfigured()) return storedUrl;
+
+  const storagePath = parseStoragePathFromUrl(storedUrl);
+  if (!storagePath) return storedUrl;
+
+  try {
+    const supabase = getSupabaseAdmin();
+    const bucket = getSupabaseStorageBucket();
+    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(storagePath, expiresIn);
+    if (error || !data?.signedUrl) return storedUrl;
+    return data.signedUrl;
+  } catch {
+    return storedUrl;
+  }
+}
+
 /** Cek bucket bisa diakses (list atau head). */
 export async function verifySupabaseStorage(): Promise<{ ok: boolean; note?: string }> {
   if (!isSupabaseStorageConfigured()) {

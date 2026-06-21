@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { ImageIcon, ZoomIn, X, Wallet } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { ImageIcon, ZoomIn, X, Wallet, ExternalLink } from 'lucide-react';
 import {
   formatCurrency,
   PAYMENT_METHOD_LABELS,
@@ -32,6 +32,43 @@ export function CustomerPaymentInfo({
   const [lightbox, setLightbox] = useState<string | null>(null);
   const paidAmount = payments.reduce((s, p) => s + p.amount, 0);
   const remaining = Math.max(0, total - paidAmount);
+
+  const proofItems = useMemo(() => {
+    const items: Array<{ method: string; amount: number; proofUrl: string }> = [];
+    for (const p of payments) {
+      if (p.proofUrl) items.push({ method: p.method, amount: p.amount, proofUrl: p.proofUrl });
+    }
+    if (customerPayment?.mode === 'COMBINATION' && customerPayment.combination) {
+      const cp = customerPayment.combination;
+      const dp = payments[0];
+      if (cp.dpProofUrl && !items.some((i) => i.proofUrl === cp.dpProofUrl)) {
+        items.unshift({
+          method: cp.dpMethod,
+          amount: dp?.amount ?? cp.dpAmount,
+          proofUrl: cp.dpProofUrl,
+        });
+      }
+      if (cp.remainingProofUrl && !items.some((i) => i.proofUrl === cp.remainingProofUrl)) {
+        items.push({
+          method: cp.remainingMethod,
+          amount: Math.max(0, total - (dp?.amount ?? cp.dpAmount)),
+          proofUrl: cp.remainingProofUrl,
+        });
+      }
+    }
+    if (
+      (customerPayment?.mode === 'QRIS' || customerPayment?.mode === 'BANK_TRANSFER') &&
+      customerPayment.proofUrl &&
+      items.length === 0
+    ) {
+      items.push({
+        method: customerPayment.mode,
+        amount: paidAmount || total,
+        proofUrl: customerPayment.proofUrl,
+      });
+    }
+    return items;
+  }, [payments, customerPayment, paidAmount, total]);
 
   return (
     <>
@@ -93,22 +130,38 @@ export function CustomerPaymentInfo({
         )}
       </div>
 
-      {payments.some((p) => p.proofUrl) && (
+      {proofItems.length > 0 && (
         <div className="rounded-2xl border border-rainbow-cyan/20 bg-brand-sky/5 p-5 shadow-aww-sm">
           <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-brand-navy">
             <ImageIcon className="h-4 w-4 text-rainbow-cyan" /> Bukti Pembayaran
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
-            {payments.filter((p) => p.proofUrl).map((p, i) => (
+            {proofItems.map((p, i) => (
               <div key={i} className="overflow-hidden rounded-xl border border-brand-navy/10 bg-white">
                 <div className="flex items-center justify-between border-b border-brand-navy/8 px-3 py-2 text-xs">
                   <span>{PAYMENT_METHOD_LABELS[p.method] ?? p.method} · {formatCurrency(p.amount)}</span>
-                  <button type="button" onClick={() => setLightbox(p.proofUrl!)} className="text-brand-navy/50">
-                    <ZoomIn className="h-4 w-4" />
-                  </button>
+                  <div className="flex gap-1">
+                    <button type="button" onClick={() => setLightbox(p.proofUrl)} className="text-brand-navy/50">
+                      <ZoomIn className="h-4 w-4" />
+                    </button>
+                    <a
+                      href={p.proofUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-brand-navy/50"
+                      title="Buka di tab baru"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  </div>
                 </div>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={p.proofUrl!} alt="Bukti pembayaran" className="max-h-48 w-full object-contain" />
+                <img
+                  src={p.proofUrl}
+                  alt="Bukti pembayaran"
+                  className="max-h-48 w-full bg-brand-navy/3 object-contain"
+                  loading="lazy"
+                />
               </div>
             ))}
           </div>

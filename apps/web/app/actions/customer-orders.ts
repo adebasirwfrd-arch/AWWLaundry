@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { prisma, Role } from '@aww/database';
-import { generateOrderNumber, redemptionDiscount, computeCombinationPayment, methodNeedsProof, type CustomerOrderPaymentInput } from '@aww/shared';
+import { generateOrderNumber, redemptionDiscount, computeCombinationPayment, methodNeedsProof, PAYMENT_METHOD_LABELS, type CustomerOrderPaymentInput } from '@aww/shared';
 import { getOrgSettings } from '@/lib/org-settings';
 import { requireAuth } from '@/lib/session';
 import { getCategoryForOrg } from '@/lib/org-settings';
@@ -10,6 +10,7 @@ import { notifyBranchRoles } from '@/lib/notify';
 import { refundRedeemedPoints } from '@/lib/loyalty';
 import { getBranchPrice } from '@/lib/audit';
 import { embedCustomerPaymentInNotes, parseCustomerPaymentFromNotes } from '@/lib/payment-plan';
+import { buildReceiptPaymentFields } from '@/lib/receipt-payment';
 
 /**
  * Find or create the Customer record linked to the logged-in customer user.
@@ -250,6 +251,40 @@ export async function createCustomerOrder(input: {
   revalidatePath('/customer/profile');
   revalidatePath('/cashier/inbox');
 
+  const receiptPayment =
+    payment.mode === 'COMBINATION' && combinationPlan
+      ? {
+          payments: combinationPlan.payments.map((p) => ({
+            method: PAYMENT_METHOD_LABELS[p.method] ?? p.method,
+            amount: p.amount,
+            label: p.label,
+          })),
+          remainingAmount:
+            combinationPlan.remainingTiming === 'LATER' ? combinationPlan.remainingAmount : undefined,
+          remainingMethod: combinationPlan.remainingMethod
+            ? (PAYMENT_METHOD_LABELS[combinationPlan.remainingMethod] ?? combinationPlan.remainingMethod)
+            : undefined,
+          paymentMethod: payment.combination!.dpMethod,
+        }
+      : paymentStatus === 'PAID'
+        ? {
+            payments: [
+              {
+                method: PAYMENT_METHOD_LABELS[payment.mode] ?? payment.mode,
+                amount: total,
+                label: 'Pembayaran',
+              },
+            ],
+            paymentMethod: payment.mode,
+          }
+        : buildReceiptPaymentFields({
+            total,
+            paymentStatus,
+            paymentMode: payment.mode,
+            payments: [],
+            notes: orderNotes,
+          });
+
   return {
     orderNumber: order.orderNumber,
     total,
@@ -264,6 +299,7 @@ export async function createCustomerOrder(input: {
     estimatedReadyAt: estimatedReadyAt.toISOString(),
     paymentStatus,
     paymentMode: payment.mode,
+    ...receiptPayment,
     items: order.items.map((it) => ({ description: it.description, qty: it.qty, total: it.total })),
   };
 }

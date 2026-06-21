@@ -18,7 +18,12 @@ interface HistoryOrder {
   total: number;
   status: string;
   paid: boolean;
+  paymentStatus?: string;
+  paymentMode?: string;
   paymentMethod?: string;
+  payments?: Array<{ method: string; amount: number; label?: string }>;
+  remainingAmount?: number;
+  remainingMethod?: string;
   weightKg: number;
   branchName: string;
   branchPhone?: string;
@@ -89,7 +94,12 @@ export function HistoryList({
       serviceName: o.serviceName,
       estimatedReadyAt: o.estimatedReadyAt,
       paid: o.paid,
+      paymentStatus: o.paymentStatus as 'PAID' | 'PARTIAL' | 'UNPAID' | undefined,
+      paymentMode: o.paymentMode,
       paymentMethod: o.paymentMethod,
+      payments: o.payments,
+      remainingAmount: o.remainingAmount,
+      remainingMethod: o.remainingMethod,
       orderStatus: o.status,
       branchName: o.branchName,
       branchPhone: o.branchPhone,

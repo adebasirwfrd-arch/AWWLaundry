@@ -10,6 +10,7 @@ import { InboxOpnameDrafts } from '@/components/inbox/inbox-opname-drafts';
 import { InboxMachineTroubles } from '@/components/inbox/inbox-machine-troubles';
 import { listPendingOpnameApprovals, listUnfinishedOpnamesForInbox } from '@/app/actions/inventory';
 import { resolveOrderPaymentPlan, parseCustomerPaymentFromNotes } from '@/lib/payment-plan';
+import { resolveCustomerPaymentProofs, resolveOrderPaymentProofs } from '@/lib/payment-proof-url';
 import { Inbox, MessageSquare, ArrowRight, Star, ClipboardCheck, AlertTriangle } from 'lucide-react';
 
 const INBOX_ROLES = [Role.CASHIER, Role.MANAGER, Role.OWNER, Role.SUPER_ADMIN, Role.WORKER];
@@ -149,6 +150,46 @@ export default async function CashierInboxPage() {
       : Promise.resolve([]),
   ]);
 
+  const pendingOrders = await Promise.all(
+    pending.map(async (o) => {
+      const payments = await resolveOrderPaymentProofs(
+        o.payments.map((p) => ({ method: p.method, amount: p.amount, proofUrl: p.proofUrl })),
+        o.notes
+      );
+      return {
+        id: o.id,
+        orderNumber: o.orderNumber,
+        customerName: o.customer?.name ?? 'Pelanggan',
+        serviceName: o.serviceType.name,
+        itemCount: o.items.reduce((s, it) => s + it.qty, 0),
+        total: o.total,
+        discount: o.discount,
+        weightKg: o.weightKg,
+        pricePerKg: o.serviceType.pricePerKg,
+        isKiloan: o.items.some((it) => it.description.toLowerCase().includes('kiloan')),
+        createdAt: o.createdAt.toISOString(),
+        notes: o.notes,
+        paymentPlan: resolveOrderPaymentPlan(
+          o.total,
+          o.notes,
+          o.payments.map((p) => ({ method: p.method, amount: p.amount }))
+        ),
+        customerPayment: await resolveCustomerPaymentProofs(parseCustomerPaymentFromNotes(o.notes)),
+        payments: payments.map((p) => ({
+          method: p.method,
+          amount: p.amount,
+          proofUrl: p.proofUrl,
+        })),
+        items: o.items.map((it) => ({
+          description: it.description,
+          qty: it.qty,
+          unitPrice: it.unitPrice,
+          total: it.total,
+        })),
+      };
+    })
+  );
+
   return (
     <DashboardShell user={session.user}>
       <div className="mb-5 flex items-center gap-3">
@@ -174,39 +215,7 @@ export default async function CashierInboxPage() {
                 <span className="ml-1 rounded-full bg-rainbow-pink px-2 py-0.5 text-xs text-white">{pending.length}</span>
               )}
             </h2>
-            <PendingOrders
-              orders={pending.map((o) => ({
-                id: o.id,
-                orderNumber: o.orderNumber,
-                customerName: o.customer?.name ?? 'Pelanggan',
-                serviceName: o.serviceType.name,
-                itemCount: o.items.reduce((s, it) => s + it.qty, 0),
-                total: o.total,
-                discount: o.discount,
-                weightKg: o.weightKg,
-                pricePerKg: o.serviceType.pricePerKg,
-                isKiloan: o.items.some((it) => it.description.toLowerCase().includes('kiloan')),
-                createdAt: o.createdAt.toISOString(),
-                notes: o.notes,
-                paymentPlan: resolveOrderPaymentPlan(
-                  o.total,
-                  o.notes,
-                  o.payments.map((p) => ({ method: p.method, amount: p.amount }))
-                ),
-                customerPayment: parseCustomerPaymentFromNotes(o.notes),
-                payments: o.payments.map((p) => ({
-                  method: p.method,
-                  amount: p.amount,
-                  proofUrl: p.proofUrl,
-                })),
-                items: o.items.map((it) => ({
-                  description: it.description,
-                  qty: it.qty,
-                  unitPrice: it.unitPrice,
-                  total: it.total,
-                })),
-              }))}
-            />
+            <PendingOrders orders={pendingOrders} />
           </section>
         )}
 

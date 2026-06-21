@@ -4,11 +4,12 @@ import { useRef, useState } from 'react';
 import Image from 'next/image';
 import { QRCodeSVG } from 'qrcode.react';
 import { Printer, Download, X, Loader2 } from 'lucide-react';
-import { formatCurrency, getCustomerLaundryStatus, getEffectiveCustomerOrderStatus, PAYMENT_METHOD_LABELS } from '@aww/shared';
+import { formatCurrency, getCustomerLaundryStatus, getEffectiveCustomerOrderStatus } from '@aww/shared';
 import { Barcode } from '@/components/ui/barcode';
 import { Button } from '@/components/ui/button';
 import { ThermalReceipt, type ReceiptData } from '@/components/pos/thermal-receipt';
 import { downloadReceiptPdf } from '@/lib/download-receipt-pdf';
+import { getReceiptPaymentStatusLabel } from '@/lib/receipt-payment';
 
 /**
  * On-screen styled bill/receipt with a CODE128 barcode of the transaction ID
@@ -26,6 +27,15 @@ export function ReceiptBill({
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
+  const paymentStatus = getReceiptPaymentStatusLabel(data);
+  const statusToneClass =
+    paymentStatus.tone === 'paid'
+      ? 'text-rainbow-green'
+      : paymentStatus.tone === 'partial'
+        ? 'text-amber-700'
+        : 'text-amber-500';
+  const effectivePaymentStatus =
+    data.paymentStatus ?? (data.paid ? 'PAID' : 'UNPAID');
 
   async function handleDownload() {
     if (!contentRef.current || downloading) return;
@@ -83,11 +93,33 @@ export function ReceiptBill({
               <span className="font-display text-base font-bold text-brand-navy">TOTAL</span>
               <span className="font-display text-xl font-extrabold text-brand-orange">{formatCurrency(data.total)}</span>
             </div>
+
+            {data.payments && data.payments.length > 0 && (
+              <div className="mt-3 space-y-1.5 border-t border-dashed border-brand-navy/10 pt-3 text-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-brand-navy/40">
+                  Rincian Pembayaran
+                </p>
+                {data.payments.map((p, i) => (
+                  <div key={i} className="flex items-center justify-between text-brand-navy/75">
+                    <span>{p.label ? `${p.label}: ` : ''}{p.method}</span>
+                    <span className="font-semibold">{formatCurrency(p.amount)}</span>
+                  </div>
+                ))}
+                {(data.remainingAmount ?? 0) > 0 && (
+                  <>
+                    <div className="flex items-center justify-between font-semibold text-amber-700">
+                      <span>Sisa ({data.remainingMethod ?? '—'})</span>
+                      <span>{formatCurrency(data.remainingAmount!)}</span>
+                    </div>
+                    <p className="text-xs text-brand-navy/55">Bayar setelah cucian selesai</p>
+                  </>
+                )}
+              </div>
+            )}
+
             <div className="mt-1 flex items-center justify-between text-sm">
               <span className="text-brand-navy/50">Status Bayar</span>
-              <span className={`font-semibold ${data.paid ? 'text-rainbow-green' : 'text-amber-500'}`}>
-                {data.paid ? `SUDAH BAYAR (${PAYMENT_METHOD_LABELS[data.paymentMethod ?? 'CASH'] ?? data.paymentMethod})` : 'BELUM BAYAR'}
-              </span>
+              <span className={`font-semibold ${statusToneClass}`}>{paymentStatus.label}</span>
             </div>
             <div className="mt-1 flex items-center justify-between text-sm">
               <span className="text-brand-navy/50">Status Cucian</span>
@@ -95,7 +127,8 @@ export function ReceiptBill({
                 {getCustomerLaundryStatus(
                   getEffectiveCustomerOrderStatus(
                     data.orderStatus ?? (data.paid ? 'RECEIVED' : 'ON_HOLD'),
-                    data.paid ? 'PAID' : 'UNPAID'
+                    effectivePaymentStatus,
+                    data.paymentMode
                   )
                 )}
               </span>
