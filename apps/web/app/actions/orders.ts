@@ -5,7 +5,7 @@ import { requireAuth } from '@/lib/session';
 import { createAuditLog, getBranchPrice, updateDailySummary } from '@/lib/audit';
 import { notifyMachineTroubleReported } from '@/lib/machine-notifications';
 import { notifyCustomerOrderCreated, notifyCustomerOrderStatus } from '@/lib/order-notifications';
-import { ORDER_STATUS_FLOW, PRODUCTION_GATE_MESSAGE, generateOrderNumber } from '@aww/shared';
+import { ORDER_STATUS_FLOW, PRODUCTION_GATE_MESSAGE, generateOrderNumber, computeCombinationPayment, type CombinationPaymentInput } from '@aww/shared';
 import { revalidatePath } from 'next/cache';
 import { awardLoyaltyPointsForOrder } from '@/lib/loyalty';
 
@@ -16,10 +16,17 @@ export async function createOrder(data: {
   serviceTypeId: string;
   paymentMethod?: string;
   proofUrl?: string;
+  combinationPayment?: CombinationPaymentInput;
   notes?: string;
 }) {
   const session = await requireAuth();
   const { branchId, id: userId, organizationId } = session.user;
+
+  const isCombination = !!data.combinationPayment;
+
+  if (isCombination && data.paymentMethod) {
+    throw new Error('Gunakan kombinasi pembayaran atau metode tunggal, bukan keduanya');
+  }
 
   if (
     data.paymentMethod &&
@@ -27,6 +34,23 @@ export async function createOrder(data: {
     !data.proofUrl
   ) {
     throw new Error('Bukti pembayaran wajib untuk Transfer dan QRIS');
+  }
+
+  if (isCombination) {
+    const cp = data.combinationPayment!;
+    for (const p of [
+      { method: cp.dpMethod, proof: cp.dpProofUrl, label: 'DP awal' },
+      ...(cp.remainingTiming === 'NOW'
+        ? [{ method: cp.remainingMethod, proof: cp.remainingProofUrl, label: 'Pelunasan' }]
+        : []),
+    ]) {
+      if (
+        (p.method === 'BANK_TRANSFER' || p.method === 'QRIS') &&
+        !p.proof
+      ) {
+        throw new Error(`Bukti pembayaran wajib untuk ${p.label} (${p.method})`);
+      }
+    }
   }
 
   const branch = await prisma.branch.findUnique({ where: { id: branchId } });
@@ -68,7 +92,38 @@ export async function createOrder(data: {
 
   const orderNumber = generateOrderNumber(branch.code);
 
+  let combinationPlan: ReturnType<typeof computeCombinationPayment> | null = null;
+  if (isCombination) {
+    combinationPlan = computeCombinationPayment(subtotal, data.combinationPayment!);
+  }
+
   const order = await prisma.$transaction(async (tx) => {
+    const paymentCreates = isCombination
+      ? combinationPlan!.payments.map((p) => ({
+          branchId,
+          amount: p.amount,
+          method: p.method as 'CASH' | 'QRIS' | 'BANK_TRANSFER',
+          receivedById: userId,
+          status: 'PAID' as const,
+          proofUrl: p.proofUrl ?? null,
+        }))
+      : data.paymentMethod
+        ? [{
+            branchId,
+            amount: subtotal,
+            method: data.paymentMethod as 'CASH' | 'QRIS' | 'BANK_TRANSFER',
+            receivedById: userId,
+            status: 'PAID' as const,
+            proofUrl: data.proofUrl ?? null,
+          }]
+        : undefined;
+
+    const paymentStatus = isCombination
+      ? combinationPlan!.paymentStatus
+      : data.paymentMethod
+        ? 'PAID'
+        : 'UNPAID';
+
     const created = await tx.order.create({
       data: {
         branchId,
@@ -86,22 +141,15 @@ export async function createOrder(data: {
             fromStatus: null,
             toStatus: 'RECEIVED',
             changedById: userId,
-            note: 'Order diterima di kasir',
+            note: isCombination
+              ? combinationPlan!.paymentStatus === 'PARTIAL'
+                ? `DP ${combinationPlan!.dpAmount} diterima — sisa ${combinationPlan!.remainingAmount} via ${data.combinationPayment!.remainingMethod} (bayar setelah selesai)`
+                : `Kombinasi lunas — DP ${combinationPlan!.dpAmount} + pelunasan ${combinationPlan!.remainingAmount}`
+              : 'Order diterima di kasir',
           },
         },
-        payments: data.paymentMethod
-          ? {
-              create: {
-                branchId,
-                amount: subtotal,
-                method: data.paymentMethod as 'CASH' | 'QRIS' | 'BANK_TRANSFER',
-                receivedById: userId,
-                status: 'PAID',
-                proofUrl: data.proofUrl ?? null,
-              },
-            }
-          : undefined,
-        paymentStatus: data.paymentMethod ? 'PAID' : 'UNPAID',
+        payments: paymentCreates ? { create: paymentCreates } : undefined,
+        paymentStatus,
       },
       include: {
         customer: true,
@@ -110,7 +158,7 @@ export async function createOrder(data: {
       },
     });
 
-    if (data.paymentMethod && data.weightKg > 0) {
+    if (paymentStatus === 'PAID' && data.weightKg > 0) {
       await awardLoyaltyPointsForOrder(tx, created.id, customer.id, data.weightKg);
     }
 
@@ -126,14 +174,18 @@ export async function createOrder(data: {
     { orderNumber, weightKg: data.weightKg, total: subtotal }
   );
 
-  if (data.paymentMethod) {
+  if (data.paymentMethod || isCombination) {
+    const auditPayments = isCombination
+      ? combinationPlan!.payments.map((p) => ({ amount: p.amount, method: p.method, label: p.label }))
+      : [{ amount: subtotal, method: data.paymentMethod, label: 'Lunas' }];
+
     await createAuditLog(
       { organizationId, branchId, userId },
       'PAYMENT_RECEIVED',
       'Payment',
       order.id,
       null,
-      { amount: subtotal, method: data.paymentMethod }
+      { payments: auditPayments, paymentStatus: order.paymentStatus }
     );
   }
 
@@ -148,7 +200,7 @@ export async function createOrder(data: {
     total: order.total,
     branchName: order.branch.name,
     estimatedReadyAt: order.estimatedReadyAt,
-    paid: !!data.paymentMethod,
+    paid: !!data.paymentMethod || isCombination,
   }).catch(() => {});
 
   revalidatePath('/cashier');
@@ -158,7 +210,18 @@ export async function createOrder(data: {
   revalidatePath('/worker');
   revalidatePath('/owner/audit-trail');
 
-  return order;
+  return {
+    ...order,
+    combinationPlan: combinationPlan
+      ? {
+          dpAmount: combinationPlan.dpAmount,
+          remainingAmount: combinationPlan.remainingAmount,
+          remainingMethod: combinationPlan.remainingMethod,
+          remainingTiming: combinationPlan.remainingTiming,
+          payments: combinationPlan.payments,
+        }
+      : null,
+  };
 }
 
 export async function updateOrderStatus(orderId: string, newStatus: string, note?: string) {
@@ -178,7 +241,7 @@ export async function updateOrderStatus(orderId: string, newStatus: string, note
   if (order.status === 'ON_HOLD') {
     throw new Error('Pesanan menunggu konfirmasi kasir — belum bisa masuk produksi');
   }
-  if (order.paymentStatus !== 'PAID') {
+  if (order.paymentStatus === 'UNPAID') {
     throw new Error(PRODUCTION_GATE_MESSAGE);
   }
 
@@ -237,7 +300,12 @@ export async function updateOrderStatus(orderId: string, newStatus: string, note
   return updated;
 }
 
-export async function receivePayment(orderId: string, method: string, amount: number) {
+export async function receivePayment(
+  orderId: string,
+  method: string,
+  amount: number,
+  proofUrl?: string
+) {
   const session = await requireAuth();
   const { branchId, id: userId, organizationId } = session.user;
 
@@ -246,6 +314,13 @@ export async function receivePayment(orderId: string, method: string, amount: nu
   });
   if (!order) throw new Error('Order tidak ditemukan');
 
+  if (
+    (method === 'BANK_TRANSFER' || method === 'QRIS') &&
+    !proofUrl
+  ) {
+    throw new Error('Bukti pembayaran wajib untuk Transfer dan QRIS');
+  }
+
   await prisma.payment.create({
     data: {
       orderId,
@@ -253,6 +328,7 @@ export async function receivePayment(orderId: string, method: string, amount: nu
       amount,
       method: method as 'CASH' | 'QRIS' | 'BANK_TRANSFER',
       receivedById: userId,
+      proofUrl: proofUrl ?? null,
     },
   });
 
@@ -287,8 +363,9 @@ export async function receivePayment(orderId: string, method: string, amount: nu
   await updateDailySummary(branchId);
   revalidatePath('/cashier');
   revalidatePath('/owner');
+  revalidatePath(`/orders/${orderId}`);
 
-  return { success: true };
+  return { success: true, paymentStatus };
 }
 
 export async function reportMachineTrouble(machineId: string, note: string) {

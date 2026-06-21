@@ -104,6 +104,7 @@ export async function getOrderDetailForStaff(orderId: string) {
   if (!order) return null;
 
   return {
+    id: order.id,
     orderNumber: order.orderNumber,
     status: order.status,
     paymentStatus: order.paymentStatus,

@@ -4,6 +4,12 @@ import { QRCodeSVG } from 'qrcode.react';
 import { formatCurrency, formatWeight } from '@aww/shared';
 import { Barcode } from '@/components/ui/barcode';
 
+export interface ReceiptPaymentLine {
+  method: string;
+  amount: number;
+  label?: string;
+}
+
 export interface ReceiptData {
   orderNumber: string;
   total: number;
@@ -15,6 +21,11 @@ export interface ReceiptData {
   estimatedReadyAt: string;
   paid?: boolean;
   paymentMethod?: string;
+  paymentStatus?: 'PAID' | 'PARTIAL' | 'UNPAID';
+  payments?: ReceiptPaymentLine[];
+  remainingAmount?: number;
+  remainingMethod?: string;
+  remainingQrisPayload?: string;
   branchName: string;
   branchPhone?: string;
   trackUrl: string;
@@ -28,6 +39,13 @@ export interface ReceiptData {
  */
 export function ThermalReceipt({ data }: { data: ReceiptData }) {
   const line = '--------------------------------';
+  const statusLabel =
+    data.paymentStatus === 'PARTIAL'
+      ? 'DP DITERIMA'
+      : data.paid
+        ? `LUNAS (${data.paymentMethod ?? 'TUNAI'})`
+        : 'BELUM BAYAR';
+
   return (
     <div className="thermal-receipt">
       <div style={{ textAlign: 'center' }}>
@@ -73,7 +91,30 @@ export function ThermalReceipt({ data }: { data: ReceiptData }) {
         <span>TOTAL</span>
         <span>{formatCurrency(data.total)}</span>
       </div>
-      <Row label="Status" value={data.paid ? `LUNAS (${data.paymentMethod ?? 'TUNAI'})` : 'BELUM BAYAR'} />
+
+      {data.payments && data.payments.length > 0 ? (
+        <>
+          <div style={{ margin: '4px 0' }}>{line}</div>
+          <div style={{ fontSize: 10, fontWeight: 'bold' }}>RINCIAN PEMBAYARAN</div>
+          {data.payments.map((p, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10 }}>
+              <span>{p.label ? `${p.label}: ` : ''}{p.method}</span>
+              <span>{formatCurrency(p.amount)}</span>
+            </div>
+          ))}
+          {(data.remainingAmount ?? 0) > 0 && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, marginTop: 2 }}>
+                <span>Sisa ({data.remainingMethod ?? '—'})</span>
+                <span>{formatCurrency(data.remainingAmount!)}</span>
+              </div>
+              <div style={{ fontSize: 9, marginTop: 2 }}>Bayar setelah cucian selesai</div>
+            </>
+          )}
+        </>
+      ) : null}
+
+      <Row label="Status" value={statusLabel} />
 
       {data.estimatedReadyAt && (
         <>
@@ -90,6 +131,15 @@ export function ThermalReceipt({ data }: { data: ReceiptData }) {
         <QRCodeSVG value={data.trackUrl} size={110} level="M" />
         <div style={{ fontSize: 9, marginTop: 4 }}>Scan untuk lacak status cucian</div>
       </div>
+
+      {data.remainingQrisPayload && (data.remainingAmount ?? 0) > 0 && (
+        <div style={{ margin: '8px 0', textAlign: 'center' }}>
+          <div style={{ fontSize: 10, fontWeight: 'bold' }}>QRIS PELUNASAN</div>
+          <div style={{ fontSize: 9 }}>{formatCurrency(data.remainingAmount!)}</div>
+          <QRCodeSVG value={data.remainingQrisPayload} size={110} level="M" />
+          <div style={{ fontSize: 9, marginTop: 4 }}>Scan saat pelunasan — nominal sesuai sisa</div>
+        </div>
+      )}
 
       <div style={{ textAlign: 'center', fontSize: 9, marginTop: 6 }}>
         Terima kasih telah mempercayakan

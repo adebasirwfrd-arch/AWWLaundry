@@ -58,7 +58,7 @@ export async function getProductionBoardData(branchId: string) {
     prisma.order.findMany({
       where: {
         branchId,
-        paymentStatus: 'PAID',
+        paymentStatus: { in: ['PAID', 'PARTIAL'] },
         status: { notIn: ['ON_HOLD', 'PICKED_UP', 'DELIVERED', 'CANCELLED'] },
       },
       include: { customer: true, serviceType: true },

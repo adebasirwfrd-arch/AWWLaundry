@@ -37,12 +37,12 @@ export function getEffectiveCustomerOrderStatus(status: string, paymentStatus: s
 }
 
 export function isOrderInProduction(status: string, paymentStatus: string): boolean {
-  if (paymentStatus !== 'PAID' || status === 'ON_HOLD' || status === 'CANCELLED') return false;
+  if (paymentStatus === 'UNPAID' || status === 'ON_HOLD' || status === 'CANCELLED') return false;
   return (ORDER_STATUS_FLOW as readonly string[]).includes(status) || status === 'DELIVERED';
 }
 
 export const PRODUCTION_GATE_MESSAGE =
-  'Pesanan harus dikonfirmasi kasir (cucian diterima & sudah bayar) sebelum masuk produksi';
+  'Pesanan harus dikonfirmasi kasir (cucian diterima & minimal DP diterima) sebelum masuk produksi';
 
 export const ORDER_STATUS_FLOW = [
   'RECEIVED',
@@ -107,3 +107,19 @@ export {
   redemptionDiscount,
   kgNeededForRedemption,
 } from './loyalty';
+
+export {
+  POS_SINGLE_PAYMENT_METHODS,
+  SPLIT_PAYMENT_METHODS,
+  PAYMENT_STATUS_LABELS,
+  methodNeedsProof,
+  computeCombinationPayment,
+  formatPaymentSummary,
+  computeRemainingBalance,
+  type PosSinglePaymentMethod,
+  type SplitPaymentMethod,
+  type RemainingTiming,
+  type CombinationPaymentInput,
+  type CombinationPaymentPlan,
+  type PaymentLineItem,
+} from './payment';

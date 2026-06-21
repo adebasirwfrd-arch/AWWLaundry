@@ -1,11 +1,16 @@
-import { formatCurrency, formatWeight, ORDER_STATUS_LABELS, PAYMENT_METHOD_LABELS, getCustomerLaundryStatus } from '@aww/shared';
+'use client';
+
+import { useRouter } from 'next/navigation';
+import { formatCurrency, formatWeight, ORDER_STATUS_LABELS, PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, getCustomerLaundryStatus, computeRemainingBalance } from '@aww/shared';
 import { Package, User, Scale, CreditCard, Clock, Building2, Smartphone, ImageIcon } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { PaymentProofSection } from '@/components/orders/payment-proof-section';
+import { RemainingPaymentForm } from '@/components/pos/remaining-payment-form';
 
 const PROOF_METHODS = new Set(['QRIS', 'BANK_TRANSFER']);
 
 interface OrderDetail {
+  id: string;
   orderNumber: string;
   status: string;
   paymentStatus: string;
@@ -31,9 +36,25 @@ interface OrderDetail {
 }
 
 export function OrderDetailView({ order }: { order: OrderDetail }) {
+  const router = useRouter();
   const paid = order.paymentStatus === 'PAID';
+  const partial = order.paymentStatus === 'PARTIAL';
+  const paidAmount = order.payments.reduce((sum, p) => sum + p.amount, 0);
+  const remaining = computeRemainingBalance(order.total, paidAmount);
   const hasProof = order.payments.some((p) => p.proofUrl && PROOF_METHODS.has(p.method));
   const missingProof = order.payments.some((p) => PROOF_METHODS.has(p.method) && !p.proofUrl);
+
+  const paymentBadgeClass = paid
+    ? 'bg-rainbow-green/15 text-rainbow-green'
+    : partial
+      ? 'bg-amber-100 text-amber-700'
+      : 'bg-amber-100 text-amber-600';
+
+  const paymentBadgeLabel = paid
+    ? 'Sudah Bayar'
+    : partial
+      ? PAYMENT_STATUS_LABELS.PARTIAL
+      : 'Belum Bayar';
 
   return (
     <div className="space-y-6">
@@ -52,8 +73,8 @@ export function OrderDetailView({ order }: { order: OrderDetail }) {
               <Smartphone className="h-3.5 w-3.5" /> Via Aplikasi
             </span>
           )}
-          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${paid ? 'bg-rainbow-green/15 text-rainbow-green' : 'bg-amber-100 text-amber-600'}`}>
-            {paid ? 'Sudah Bayar' : 'Belum Bayar'}
+          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${paymentBadgeClass}`}>
+            {paymentBadgeLabel}
           </span>
           <StatusBadge status={order.status} />
         </div>
@@ -136,7 +157,23 @@ export function OrderDetailView({ order }: { order: OrderDetail }) {
                   Upload bukti via menu Kasir saat konfirmasi pembayaran Transfer/QRIS.
                 </p>
               )}
+              {partial && remaining > 0 && (
+                <div className="rounded-xl bg-amber-50 px-3 py-2 text-sm">
+                  <span className="text-brand-navy/60">Sisa tagihan: </span>
+                  <span className="font-bold text-brand-orange">{formatCurrency(remaining)}</span>
+                </div>
+              )}
             </div>
+          )}
+
+          {partial && remaining > 0 && (
+            <RemainingPaymentForm
+              orderId={order.id}
+              orderNumber={order.orderNumber}
+              total={order.total}
+              paidAmount={paidAmount}
+              onPaid={() => router.refresh()}
+            />
           )}
         </section>
       </div>

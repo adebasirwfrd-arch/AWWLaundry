@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import type { SplitPaymentMethod, RemainingTiming } from '@aww/shared';
 
 interface PosDraftState {
   customerName: string;
@@ -9,6 +10,10 @@ interface PosDraftState {
   weight: string;
   serviceId: string;
   paymentMethod: string;
+  dpMethod: SplitPaymentMethod;
+  dpAmount: string;
+  remainingMethod: SplitPaymentMethod;
+  remainingTiming: RemainingTiming;
   setField: <K extends keyof Omit<PosDraftState, 'setField' | 'clearDraft'>>(
     key: K,
     value: PosDraftState[K]
@@ -22,6 +27,10 @@ const empty = {
   weight: '',
   serviceId: '',
   paymentMethod: 'CASH',
+  dpMethod: 'CASH' as SplitPaymentMethod,
+  dpAmount: '',
+  remainingMethod: 'QRIS' as SplitPaymentMethod,
+  remainingTiming: 'LATER' as RemainingTiming,
 };
 
 export const usePosDraftStore = create<PosDraftState>()(
@@ -40,6 +49,10 @@ export const usePosDraftStore = create<PosDraftState>()(
         weight: s.weight,
         serviceId: s.serviceId,
         paymentMethod: s.paymentMethod,
+        dpMethod: s.dpMethod,
+        dpAmount: s.dpAmount,
+        remainingMethod: s.remainingMethod,
+        remainingTiming: s.remainingTiming,
       }),
     }
   )
