@@ -13,6 +13,7 @@ import {
   type PaymentFilter,
 } from '@/lib/owner-analytics';
 import type { DashboardPeriod } from '@/lib/date-buckets';
+import { isBranchManager } from '@/lib/branch-access';
 
 const ADMIN_ROLES = [Role.OWNER, Role.SUPER_ADMIN];
 const STAFF_ROLES = [Role.CASHIER, Role.WORKER, Role.MANAGER] as const;
@@ -32,9 +33,10 @@ export async function getOwnerDashboardMetrics(input: {
   paymentMethod: PaymentFilter;
 }) {
   const session = await requireAuth([Role.OWNER, Role.SUPER_ADMIN, Role.MANAGER]);
+  const branchScoped = isBranchManager(session.user.role);
   return fetchOwnerDashboardData({
     organizationId: session.user.organizationId,
-    branchId: input.branchId || undefined,
+    branchId: branchScoped ? session.user.branchId : input.branchId || undefined,
     period: input.period,
     paymentMethod: input.paymentMethod,
   });
@@ -42,11 +44,15 @@ export async function getOwnerDashboardMetrics(input: {
 
 export async function listOrgBranches() {
   const session = await requireAuth([Role.OWNER, Role.SUPER_ADMIN, Role.MANAGER]);
-  return prisma.branch.findMany({
-    where: { organizationId: session.user.organizationId },
+  const branches = await prisma.branch.findMany({
+    where: {
+      organizationId: session.user.organizationId,
+      ...(isBranchManager(session.user.role) ? { id: session.user.branchId } : {}),
+    },
     orderBy: { name: 'asc' },
     select: { id: true, code: true, name: true, isActive: true },
   });
+  return branches;
 }
 
 export async function loadBranchDetail(branchId: string) {

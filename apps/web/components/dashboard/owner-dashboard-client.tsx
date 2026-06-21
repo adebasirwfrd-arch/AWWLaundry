@@ -29,12 +29,18 @@ const PRODUCTION_LABELS: Record<string, string> = {
 export function OwnerDashboardClient({
   branches,
   initialData,
+  showBranchFilter = true,
+  branchLabel,
+  defaultBranchId = '',
 }: {
   branches: BranchOption[];
   initialData: Awaited<ReturnType<typeof getOwnerDashboardMetrics>>;
+  showBranchFilter?: boolean;
+  branchLabel?: string;
+  defaultBranchId?: string;
 }) {
   const [data, setData] = useState(initialData);
-  const [branchId, setBranchId] = useState('');
+  const [branchId, setBranchId] = useState(defaultBranchId);
   const [period, setPeriod] = useState<DashboardPeriod>('today');
   const [paymentMethod, setPaymentMethod] = useState<PaymentFilter>('ALL');
   const [pending, startTransition] = useTransition();
@@ -42,7 +48,7 @@ export function OwnerDashboardClient({
   function applyFilters(b?: string, p?: DashboardPeriod, pay?: PaymentFilter) {
     startTransition(async () => {
       const result = await getOwnerDashboardMetrics({
-        branchId: (b ?? branchId) || undefined,
+        branchId: showBranchFilter ? (b ?? branchId) || undefined : defaultBranchId || undefined,
         period: p ?? period,
         paymentMethod: pay ?? paymentMethod,
       });
@@ -59,22 +65,31 @@ export function OwnerDashboardClient({
           {pending && <Loader2 className="h-4 w-4 animate-spin text-rainbow-cyan" />}
         </div>
 
-        <div>
-          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-brand-navy/45">Cabang</label>
-          <select
-            value={branchId}
-            onChange={(e) => {
-              setBranchId(e.target.value);
-              applyFilters(e.target.value);
-            }}
-            className="h-10 min-w-[180px] rounded-xl border border-brand-navy/15 px-3 text-sm"
-          >
-            <option value="">Semua Cabang</option>
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>{b.name}</option>
-            ))}
-          </select>
-        </div>
+        {showBranchFilter ? (
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-brand-navy/45">Cabang</label>
+            <select
+              value={branchId}
+              onChange={(e) => {
+                setBranchId(e.target.value);
+                applyFilters(e.target.value);
+              }}
+              className="h-10 min-w-[180px] rounded-xl border border-brand-navy/15 px-3 text-sm"
+            >
+              <option value="">Semua Cabang</option>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </div>
+        ) : branchLabel ? (
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-brand-navy/45">Cabang</label>
+            <div className="flex h-10 min-w-[180px] items-center rounded-xl border border-brand-navy/15 bg-brand-navy/5 px-3 text-sm font-medium text-brand-navy">
+              {branchLabel}
+            </div>
+          </div>
+        ) : null}
 
         <div>
           <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-brand-navy/45">Periode</label>

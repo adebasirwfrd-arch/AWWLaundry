@@ -18,8 +18,9 @@ export default async function InventoryPage({
 }) {
   const session = await requireAuth([Role.OWNER, Role.MANAGER]);
   const params = await searchParams;
+  const branchScoped = session.user.role === Role.MANAGER;
   const branches = await listOrgBranches();
-  const branchId = params.branch ?? session.user.branchId;
+  const branchId = branchScoped ? session.user.branchId : (params.branch ?? session.user.branchId);
 
   const [items, movements, opnames, summary] = await Promise.all([
     listInventoryItems(branchId),
@@ -33,7 +34,9 @@ export default async function InventoryPage({
       <div className="mb-6">
         <h1 className="font-display text-3xl font-bold text-brand-navy">Stok & Opname</h1>
         <p className="text-brand-navy/60">
-          Inventori lengkap — master stok, pergerakan, opname berkala, rekonsiliasi kas
+          {branchScoped
+            ? `Inventori cabang ${session.user.branchName} — master stok, pergerakan, opname berkala`
+            : 'Inventori lengkap — master stok, pergerakan, opname berkala, rekonsiliasi kas'}
         </p>
       </div>
 
@@ -48,6 +51,8 @@ export default async function InventoryPage({
           summary={summary}
           userRole={session.user.role}
           defaultTab={params.tab as 'items' | 'movements' | 'opname' | 'history' | undefined}
+          lockBranch={branchScoped}
+          branchLabel={branchScoped ? session.user.branchName : undefined}
         />
       </Suspense>
     </DashboardShell>

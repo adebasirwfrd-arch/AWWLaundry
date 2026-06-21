@@ -25,7 +25,9 @@ function isApprover(role: Role) {
 async function inventoryCtx(branchId?: string) {
   const session = await requireAuth(INVENTORY_ROLES);
   const targetBranchId =
-    session.user.role === Role.CASHIER ? session.user.branchId : (branchId ?? session.user.branchId);
+    session.user.role === Role.CASHIER || session.user.role === Role.MANAGER
+      ? session.user.branchId
+      : (branchId ?? session.user.branchId);
   const branch = await prisma.branch.findFirst({
     where: { id: targetBranchId, organizationId: session.user.organizationId },
   });

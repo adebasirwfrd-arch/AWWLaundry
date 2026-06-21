@@ -37,13 +37,12 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: '/owner', label: 'Dashboard', icon: LayoutDashboard, roles: [Role.OWNER, Role.SUPER_ADMIN] },
+  { href: '/owner', label: 'Dashboard', icon: LayoutDashboard, roles: [Role.OWNER, Role.SUPER_ADMIN, Role.MANAGER] },
   { href: '/owner/orders', label: 'Order', icon: ClipboardList, roles: [Role.OWNER, Role.SUPER_ADMIN, Role.MANAGER] },
   { href: '/cashier/orders', label: 'Order', icon: ClipboardList, roles: [Role.CASHIER] },
   { href: '/owner/cashflow', label: 'Cashflow', icon: Landmark, roles: [Role.OWNER, Role.SUPER_ADMIN, Role.MANAGER] },
   { href: '/cashier', label: 'POS Kasir', icon: ShoppingCart, roles: [Role.CASHIER, Role.MANAGER, Role.OWNER] },
   { href: '/cashier/cashflow', label: 'Cashflow', icon: Landmark, roles: [Role.CASHIER] },
-  { href: '/manager', label: 'Dashboard', icon: LayoutDashboard, roles: [Role.MANAGER] },
   { href: '/worker', label: 'Board Produksi', icon: Wrench, roles: [Role.WORKER, Role.MANAGER, Role.CASHIER, Role.OWNER, Role.SUPER_ADMIN] },
   { href: '/cashier/inbox', label: 'Kotak Masuk', icon: Inbox, roles: [Role.CASHIER, Role.MANAGER, Role.OWNER, Role.WORKER] },
   { href: '/messages', label: 'Pesan', icon: MessageSquare, roles: [Role.OWNER, Role.MANAGER, Role.CASHIER] },
@@ -75,6 +74,14 @@ function pickBottomNav(items: NavItem[], role: Role): NavItem[] {
     add('/worker');
     add('/cashier/inbox');
     add('/discussion');
+    return picked.slice(0, 4);
+  }
+
+  if (role === Role.MANAGER) {
+    add('/owner');
+    add('/owner/orders');
+    add('/owner/cashflow');
+    add('/cashier/inbox');
     return picked.slice(0, 4);
   }
 

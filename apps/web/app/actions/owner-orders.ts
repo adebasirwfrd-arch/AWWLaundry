@@ -8,16 +8,15 @@ import {
 } from '@/lib/order-filters';
 import { resolveOrderPaymentProofs } from '@/lib/payment-proof-url';
 import { resolveTransferBankDetails } from '@/lib/branch-payment-settings';
-import { hasOrgWideBranchAccess } from '@/lib/branch-access';
+import { hasOrgWideBranchAccess, isBranchScopedStaff } from '@/lib/branch-access';
 
 const VIEW_ROLES = [Role.OWNER, Role.SUPER_ADMIN, Role.MANAGER, Role.CASHIER];
 
 export async function listOwnerOrders(filters: OrderListFilters) {
   const session = await requireAuth(VIEW_ROLES);
-  const lockedBranchId =
-    session.user.role === Role.MANAGER || session.user.role === Role.CASHIER
-      ? session.user.branchId
-      : undefined;
+  const lockedBranchId = isBranchScopedStaff(session.user.role)
+    ? session.user.branchId
+    : undefined;
 
   const where = buildOrderListWhere(
     filters,
@@ -69,7 +68,7 @@ export async function listOwnerOrders(filters: OrderListFilters) {
       paymentAmount: o.payments[0]?.amount ?? null,
       hasProof: !!o.payments[0]?.proofUrl,
     })),
-    branches,
+    branches: lockedBranchId ? branches.filter((b) => b.id === lockedBranchId) : branches,
     serviceTypes,
   };
 }
@@ -163,10 +162,9 @@ export async function findOrderIdByNumber(rawCode: string) {
   const orderNumber = rawCode.trim().toUpperCase();
   if (!orderNumber) throw new Error('Nomor order wajib diisi');
 
-  const lockedBranchId =
-    session.user.role === Role.MANAGER || session.user.role === Role.CASHIER
-      ? session.user.branchId
-      : undefined;
+  const lockedBranchId = isBranchScopedStaff(session.user.role)
+    ? session.user.branchId
+    : undefined;
 
   const order = await prisma.order.findFirst({
     where: {

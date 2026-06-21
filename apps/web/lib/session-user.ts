@@ -36,7 +36,15 @@ type BranchRoleRow = {
 
 export function pickPrimaryBranchRole(roles: BranchRoleRow[]): BranchRoleRow | null {
   if (roles.length === 0) return null;
-  return [...roles].sort((a, b) => ROLE_PRIORITY[b.role] - ROLE_PRIORITY[a.role])[0] ?? null;
+  const staffRoles = roles.filter((row) => STAFF_OR_ADMIN_ROLES.has(row.role));
+  const pool = staffRoles.length > 0 ? staffRoles : roles;
+  return (
+    [...pool].sort((a, b) => {
+      const priorityDiff = ROLE_PRIORITY[b.role] - ROLE_PRIORITY[a.role];
+      if (priorityDiff !== 0) return priorityDiff;
+      return a.branchId.localeCompare(b.branchId);
+    })[0] ?? null
+  );
 }
 
 export async function loadSessionUserByEmail(email: string): Promise<SessionUserPayload | null> {

@@ -18,7 +18,9 @@ export default async function AnalyticsPage() {
       <div className="mb-6">
         <h1 className="font-display text-3xl font-bold text-brand-navy">Analitik</h1>
         <p className="text-brand-navy/60">
-          Dashboard lengkap order, cashflow, produksi, rating, stok & pelanggan
+          {branchScoped
+            ? `Dashboard lengkap cabang ${session.user.branchName} — order, cashflow, produksi, rating, stok & pelanggan`
+            : 'Dashboard lengkap order, cashflow, produksi, rating, stok & pelanggan'}
         </p>
       </div>
 
