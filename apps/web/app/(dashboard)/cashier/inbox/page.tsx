@@ -11,6 +11,7 @@ import { InboxMachineTroubles } from '@/components/inbox/inbox-machine-troubles'
 import { listPendingOpnameApprovals, listUnfinishedOpnamesForInbox } from '@/app/actions/inventory';
 import { resolveOrderPaymentPlan, parseCustomerPaymentFromNotes } from '@/lib/payment-plan';
 import { resolveCustomerPaymentProofs, resolveOrderPaymentProofs } from '@/lib/payment-proof-url';
+import { hasOrgWideBranchAccess, isBranchLockedStaff } from '@/lib/branch-access';
 import { Inbox, MessageSquare, ArrowRight, Star, ClipboardCheck, AlertTriangle } from 'lucide-react';
 
 const INBOX_ROLES = [Role.CASHIER, Role.MANAGER, Role.OWNER, Role.SUPER_ADMIN, Role.WORKER];
@@ -69,8 +70,8 @@ function mapMachineTroubleRow(r: {
 export default async function CashierInboxPage() {
   const session = await requireAuth(INBOX_ROLES);
   const isWorker = session.user.role === Role.WORKER;
-  const isOrgWideInbox =
-    session.user.role === Role.OWNER || session.user.role === Role.SUPER_ADMIN;
+  const isOrgWideInbox = hasOrgWideBranchAccess(session.user.role);
+  const isBranchLocked = isBranchLockedStaff(session.user.role);
   const hasInventoryInbox =
     session.user.role === Role.CASHIER ||
     session.user.role === Role.MANAGER ||
@@ -84,9 +85,12 @@ export default async function CashierInboxPage() {
     isWorker
       ? Promise.resolve([])
       : prisma.order.findMany({
-          where: isOrgWideInbox
-            ? { branch: { organizationId: session.user.organizationId }, status: 'ON_HOLD' }
-            : { branchId: session.user.branchId, status: 'ON_HOLD' },
+          where: {
+            status: 'ON_HOLD',
+            ...(isOrgWideInbox
+              ? { branch: { organizationId: session.user.organizationId } }
+              : { branchId: session.user.branchId }),
+          },
           orderBy: { createdAt: 'desc' },
           include: {
             customer: { select: { name: true } },
@@ -97,7 +101,9 @@ export default async function CashierInboxPage() {
           },
         }),
     prisma.orderReview.findMany({
-      where: { order: { branchId: session.user.branchId } },
+      where: isOrgWideInbox
+        ? { order: { branch: { organizationId: session.user.organizationId } } }
+        : { order: { branchId: session.user.branchId } },
       orderBy: { createdAt: 'desc' },
       take: 15,
       include: {
@@ -113,7 +119,17 @@ export default async function CashierInboxPage() {
     isWorker
       ? Promise.resolve([])
       : prisma.conversation.findMany({
-          where: { organizationId: session.user.organizationId, type: 'CUSTOMER_SUPPORT' },
+          where: {
+            organizationId: session.user.organizationId,
+            type: 'CUSTOMER_SUPPORT',
+            ...(isOrgWideInbox
+              ? {}
+              : {
+                  customer: {
+                    orders: { some: { branchId: session.user.branchId } },
+                  },
+                }),
+          },
           orderBy: { lastMessageAt: 'desc' },
           take: 5,
           include: {
@@ -217,7 +233,11 @@ export default async function CashierInboxPage() {
           <p className="text-brand-navy/60">
             {isWorker
               ? `Laporan mesin & balasan owner · Ulasan pelanggan · ${session.user.branchName}`
-              : `Konfirmasi pesanan, ulasan & chat · ${session.user.branchName}`}
+              : isBranchLocked
+                ? `Konfirmasi pesanan cabang ${session.user.branchName} · ulasan & chat cabang ini`
+                : isOrgWideInbox
+                  ? 'Konfirmasi pesanan semua cabang · ulasan & chat organisasi'
+                  : `Konfirmasi pesanan, ulasan & chat · ${session.user.branchName}`}
           </p>
         </div>
       </div>

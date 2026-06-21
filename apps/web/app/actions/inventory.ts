@@ -445,7 +445,7 @@ export async function listUnfinishedOpnamesForInbox() {
       status: { in: ['DRAFT', 'COUNTING'] },
       createdById: session.user.id,
       branch: { organizationId: session.user.organizationId },
-      ...(role === Role.CASHIER ? { branchId: session.user.branchId } : {}),
+      ...(role === Role.CASHIER || role === Role.MANAGER ? { branchId: session.user.branchId } : {}),
     },
     orderBy: { createdAt: 'desc' },
     include: {

@@ -11,12 +11,9 @@ import {
 } from '@/lib/capex-asset';
 import { deriveMachineCondition } from '@/lib/machine-condition';
 import { parseCustomerPaymentFromNotes } from '@/lib/payment-plan';
+import { hasOrgWideBranchAccess } from '@/lib/branch-access';
 
 const BOARD_ROLES = [Role.WORKER, Role.MANAGER, Role.OWNER, Role.SUPER_ADMIN, Role.CASHIER];
-
-function isOwnerLike(role: Role): boolean {
-  return role === Role.OWNER || role === Role.SUPER_ADMIN;
-}
 
 async function assertBranchAccess(branchId: string) {
   const session = await requireAuth(BOARD_ROLES);
@@ -26,7 +23,7 @@ async function assertBranchAccess(branchId: string) {
   });
   if (!branch) throw new Error('Cabang tidak ditemukan');
 
-  if (!isOwnerLike(session.user.role) && session.user.branchId !== branchId) {
+  if (!hasOrgWideBranchAccess(session.user.role) && session.user.branchId !== branchId) {
     throw new Error('Tidak punya akses ke cabang ini');
   }
 
@@ -35,7 +32,7 @@ async function assertBranchAccess(branchId: string) {
 
 export async function listProductionBoardBranches() {
   const session = await requireAuth(BOARD_ROLES);
-  if (!isOwnerLike(session.user.role)) {
+  if (!hasOrgWideBranchAccess(session.user.role)) {
     return [
       {
         id: session.user.branchId,

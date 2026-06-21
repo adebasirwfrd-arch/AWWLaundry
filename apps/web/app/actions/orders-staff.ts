@@ -14,16 +14,17 @@ import { sumPaidAmount } from '@/lib/payment-behavior-analytics';
 import { notifyCustomerOrderCreated, notifyCustomerOrderStatus } from '@/lib/order-notifications';
 import { awardLoyaltyPointsForOrder, awardAppOrderBonus, refundRedeemedPoints } from '@/lib/loyalty';
 import { embedPaymentPlanInNotes, parseCustomerPaymentFromNotes } from '@/lib/payment-plan';
+import {
+  assertStaffOrderBranchInOrg,
+  type StaffSession,
+} from '@/lib/branch-access';
 
 const STAFF = [Role.CASHIER, Role.MANAGER, Role.OWNER, Role.SUPER_ADMIN];
 
 const PAYMENT_METHODS = ['CASH', 'BANK_TRANSFER', 'QRIS'] as const;
 export type ConfirmPaymentMethod = (typeof PAYMENT_METHODS)[number];
 
-async function loadOrderForStaff(
-  orderId: string,
-  session: { branchId: string; organizationId: string; role: Role }
-) {
+async function loadOrderForStaff(orderId: string, session: StaffSession) {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: {
@@ -35,18 +36,7 @@ async function loadOrderForStaff(
   });
   if (!order) throw new Error('Pesanan tidak ditemukan');
 
-  const orgWideAccess =
-    session.role === Role.OWNER || session.role === Role.SUPER_ADMIN;
-
-  if (orgWideAccess) {
-    const branch = await prisma.branch.findFirst({
-      where: { id: order.branchId, organizationId: session.organizationId },
-      select: { id: true },
-    });
-    if (!branch) throw new Error('Pesanan tidak ditemukan');
-  } else if (order.branchId !== session.branchId) {
-    throw new Error('Pesanan tidak ditemukan');
-  }
+  await assertStaffOrderBranchInOrg(order.branchId, session);
 
   return order;
 }

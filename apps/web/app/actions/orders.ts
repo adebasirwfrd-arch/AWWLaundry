@@ -3,6 +3,7 @@
 import { prisma, Role } from '@aww/database';
 import { requireAuth } from '@/lib/session';
 import { createAuditLog, getBranchPrice, updateDailySummary } from '@/lib/audit';
+import { hasOrgWideBranchAccess } from '@/lib/branch-access';
 import { notifyMachineTroubleReported } from '@/lib/machine-notifications';
 import { notifyCustomerOrderCreated, notifyCustomerOrderStatus } from '@/lib/order-notifications';
 import { ORDER_STATUS_FLOW, PRODUCTION_GATE_MESSAGE, generateOrderNumber, computeCombinationPayment, type CombinationPaymentInput } from '@aww/shared';
@@ -325,10 +326,15 @@ export async function receivePayment(
   proofUrl?: string
 ) {
   const session = await requireAuth();
-  const { branchId, id: userId, organizationId } = session.user;
+  const { id: userId, organizationId, role } = session.user;
+  const isOrgWide = hasOrgWideBranchAccess(role);
 
   const order = await prisma.order.findFirst({
-    where: { id: orderId, branchId },
+    where: {
+      id: orderId,
+      branch: { organizationId },
+      ...(isOrgWide ? {} : { branchId: session.user.branchId }),
+    },
   });
   if (!order) throw new Error('Order tidak ditemukan');
 
@@ -342,7 +348,7 @@ export async function receivePayment(
   await prisma.payment.create({
     data: {
       orderId,
-      branchId,
+      branchId: order.branchId,
       amount,
       method: method as 'CASH' | 'QRIS' | 'BANK_TRANSFER',
       receivedById: userId,
@@ -370,7 +376,7 @@ export async function receivePayment(
   });
 
   await createAuditLog(
-    { organizationId, branchId, userId },
+    { organizationId, branchId: order.branchId, userId },
     'PAYMENT_RECEIVED',
     'Payment',
     orderId,
@@ -378,7 +384,7 @@ export async function receivePayment(
     { amount, method }
   );
 
-  await updateDailySummary(branchId);
+  await updateDailySummary(order.branchId);
   revalidatePath('/cashier');
   revalidatePath('/cashier/cashflow');
   revalidatePath('/owner');

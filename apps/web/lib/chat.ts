@@ -5,6 +5,7 @@ import {
   isRoleInDiscussionScope,
 } from '@/lib/discussion';
 import { isDiscussionModeratorRole, isOwnerLikeRole } from '@/lib/api-access-user';
+import { hasOrgWideBranchAccess } from '@/lib/branch-access';
 
 const STAFF_ROLES = ['OWNER', 'SUPER_ADMIN', 'MANAGER', 'CASHIER', 'WORKER'];
 const SUPPORT_STAFF_ROLES = ['OWNER', 'SUPER_ADMIN', 'MANAGER', 'CASHIER'];
@@ -94,7 +95,15 @@ export async function getAccessibleConversation(user: AccessUser, conversationId
   if (role === 'CUSTOMER') {
     return convo.customer?.userId === user.id ? convo : null;
   }
-  return SUPPORT_STAFF_ROLES.includes(role) ? convo : null;
+  if (!SUPPORT_STAFF_ROLES.includes(role)) return null;
+  if (hasOrgWideBranchAccess(role)) return convo;
+  if (!user.branchId || !convo.customerId) return null;
+
+  const linkedOrder = await prisma.order.findFirst({
+    where: { customerId: convo.customerId, branchId: user.branchId },
+    select: { id: true },
+  });
+  return linkedOrder ? convo : null;
 }
 
 export { STAFF_ROLES, SUPPORT_STAFF_ROLES, canAccessStaffDiscussion };

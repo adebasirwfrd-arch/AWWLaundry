@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { prisma, Role } from '@aww/database';
 import { requireAuth } from '@/lib/session';
+import { hasOrgWideBranchAccess } from '@/lib/branch-access';
 import { DashboardShell } from '@/components/layout/dashboard-shell';
 import { MessagesClient } from '@/components/chat/messages-client';
 import { MessageSquare } from 'lucide-react';
@@ -9,7 +10,17 @@ export default async function MessagesPage() {
   const session = await requireAuth([Role.OWNER, Role.SUPER_ADMIN, Role.MANAGER, Role.CASHIER]);
 
   const conversations = await prisma.conversation.findMany({
-    where: { organizationId: session.user.organizationId, type: 'CUSTOMER_SUPPORT' },
+    where: {
+      organizationId: session.user.organizationId,
+      type: 'CUSTOMER_SUPPORT',
+      ...(hasOrgWideBranchAccess(session.user.role)
+        ? {}
+        : {
+            customer: {
+              orders: { some: { branchId: session.user.branchId } },
+            },
+          }),
+    },
     orderBy: { lastMessageAt: 'desc' },
     include: {
       customer: { select: { name: true } },

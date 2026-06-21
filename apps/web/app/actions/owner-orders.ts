@@ -7,6 +7,7 @@ import {
   type OrderListFilters,
 } from '@/lib/order-filters';
 import { resolveOrderPaymentProofs } from '@/lib/payment-proof-url';
+import { hasOrgWideBranchAccess } from '@/lib/branch-access';
 
 const VIEW_ROLES = [Role.OWNER, Role.SUPER_ADMIN, Role.MANAGER];
 
@@ -79,7 +80,7 @@ export async function getOrderDetailForStaff(orderId: string) {
     Role.WORKER,
   ]);
 
-  const isOrgWide = session.user.role === Role.OWNER || session.user.role === Role.SUPER_ADMIN;
+  const isOrgWide = hasOrgWideBranchAccess(session.user.role);
 
   const order = await prisma.order.findFirst({
     where: isOrgWide
