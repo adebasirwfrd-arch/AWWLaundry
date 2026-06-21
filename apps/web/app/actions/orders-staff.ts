@@ -13,7 +13,7 @@ import { createAuditLog, updateDailySummary } from '@/lib/audit';
 import { sumPaidAmount } from '@/lib/payment-behavior-analytics';
 import { notifyCustomerOrderCreated, notifyCustomerOrderStatus } from '@/lib/order-notifications';
 import { awardLoyaltyPointsForOrder, awardAppOrderBonus, refundRedeemedPoints } from '@/lib/loyalty';
-import { embedPaymentPlanInNotes, parseCustomerPaymentFromNotes, resolveOrderPaymentPlan } from '@/lib/payment-plan';
+import { embedPaymentPlanInNotes, resolveOrderCustomerPayment, resolveOrderPaymentPlan } from '@/lib/payment-plan';
 import {
   assertStaffOrderBranchInOrg,
   type StaffSession,
@@ -95,7 +95,7 @@ export async function confirmOrderWithPayment(input: {
 
   const existingPaid = sumPaidAmount(order.payments);
   const prepaidViaApp = existingPaid > 0;
-  const customerPayment = parseCustomerPaymentFromNotes(order.notes);
+  const customerPayment = resolveOrderCustomerPayment(order);
   const payLaterViaApp = customerPayment?.mode === 'PAY_LATER';
 
   if (!prepaidViaApp && !payLaterViaApp) {

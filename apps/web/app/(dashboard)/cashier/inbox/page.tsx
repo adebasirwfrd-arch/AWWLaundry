@@ -9,7 +9,7 @@ import { InboxOpnameApprovals } from '@/components/inbox/inbox-opname-approvals'
 import { InboxOpnameDrafts } from '@/components/inbox/inbox-opname-drafts';
 import { InboxMachineTroubles } from '@/components/inbox/inbox-machine-troubles';
 import { listPendingOpnameApprovals, listUnfinishedOpnamesForInbox } from '@/app/actions/inventory';
-import { resolveOrderPaymentPlan, parseCustomerPaymentFromNotes } from '@/lib/payment-plan';
+import { resolveOrderPaymentPlan, resolveOrderCustomerPayment } from '@/lib/payment-plan';
 import { resolveCustomerPaymentProofs, resolveOrderPaymentProofs } from '@/lib/payment-proof-url';
 import { hasOrgWideBranchAccess, isBranchLockedStaff } from '@/lib/branch-access';
 import { Inbox, MessageSquare, ArrowRight, Star, ClipboardCheck, AlertTriangle } from 'lucide-react';
@@ -180,7 +180,12 @@ export default async function CashierInboxPage() {
       }));
 
       let payments = basePayments;
-      let customerPayment = parseCustomerPaymentFromNotes(o.notes);
+      let customerPayment = resolveOrderCustomerPayment({
+        fromApp: o.fromApp,
+        notes: o.notes,
+        paymentStatus: o.paymentStatus,
+        payments: o.payments,
+      });
 
       try {
         payments = await resolveOrderPaymentProofs(basePayments, o.notes);

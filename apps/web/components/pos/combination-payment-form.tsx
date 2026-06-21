@@ -188,7 +188,7 @@ export function CombinationPaymentForm({
   );
 }
 
-function TransferBankInfo({ amount }: { amount: number }) {
+export function TransferBankInfo({ amount }: { amount: number }) {
   return (
     <div className="rounded-xl border border-rainbow-blue/20 bg-rainbow-blue/5 p-3 text-sm">
       <p className="font-semibold text-brand-navy">Transfer ke {TRANSFER_BANK_DETAILS.bankName}</p>

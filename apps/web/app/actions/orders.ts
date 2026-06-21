@@ -9,7 +9,7 @@ import { notifyCustomerOrderCreated, notifyCustomerOrderStatus } from '@/lib/ord
 import { ORDER_STATUS_FLOW, PRODUCTION_GATE_MESSAGE, generateOrderNumber, computeCombinationPayment, type CombinationPaymentInput } from '@aww/shared';
 import { revalidatePath } from 'next/cache';
 import { awardLoyaltyPointsForOrder } from '@/lib/loyalty';
-import { embedPaymentPlanInNotes, parseCustomerPaymentFromNotes } from '@/lib/payment-plan';
+import { embedCustomerPaymentInNotes, embedPaymentPlanInNotes, resolveOrderCustomerPayment } from '@/lib/payment-plan';
 
 export async function createOrder(data: {
   customerName: string;
@@ -100,9 +100,11 @@ export async function createOrder(data: {
   }
 
   const orderNotes =
-    isCombination && data.combinationPayment
-      ? embedPaymentPlanInNotes(data.notes, data.combinationPayment)
-      : data.notes;
+    !data.paymentMethod && !isCombination
+      ? embedCustomerPaymentInNotes(data.notes, { mode: 'PAY_LATER' })
+      : isCombination && data.combinationPayment
+        ? embedPaymentPlanInNotes(data.notes, data.combinationPayment)
+        : data.notes;
 
   const order = await prisma.$transaction(async (tx) => {
     const paymentCreates = isCombination
@@ -260,7 +262,7 @@ export async function updateOrderStatus(orderId: string, newStatus: string, note
     throw new Error('Pesanan menunggu konfirmasi kasir — belum bisa masuk produksi');
   }
   if (order.paymentStatus === 'UNPAID') {
-    const payLater = parseCustomerPaymentFromNotes(order.notes)?.mode === 'PAY_LATER';
+    const payLater = resolveOrderCustomerPayment(order)?.mode === 'PAY_LATER';
     if (!payLater) throw new Error(PRODUCTION_GATE_MESSAGE);
   }
 

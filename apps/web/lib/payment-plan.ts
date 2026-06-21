@@ -97,3 +97,29 @@ export function parseCustomerPaymentFromNotes(
     return null;
   }
 }
+
+/** Termasuk POS bayar nanti (unpaid walk-in) yang belum punya marker di notes. */
+export function resolveOrderCustomerPayment(order: {
+  fromApp: boolean;
+  notes: string | null | undefined;
+  paymentStatus: string;
+  payments?: { amount: number; status?: string }[];
+}): CustomerOrderPaymentInput | null {
+  const fromNotes = parseCustomerPaymentFromNotes(order.notes);
+  if (fromNotes) return fromNotes;
+
+  const paid = (order.payments ?? [])
+    .filter((p) => !p.status || p.status === 'PAID')
+    .reduce((s, p) => s + p.amount, 0);
+
+  if (
+    !order.fromApp &&
+    order.paymentStatus === 'UNPAID' &&
+    paid === 0 &&
+    !parsePaymentPlanFromNotes(order.notes)
+  ) {
+    return { mode: 'PAY_LATER' };
+  }
+
+  return null;
+}

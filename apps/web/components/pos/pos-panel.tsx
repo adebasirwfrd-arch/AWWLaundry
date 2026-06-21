@@ -18,6 +18,7 @@ import { PaymentProofCapture } from '@/components/pos/payment-proof-capture';
 import { QrisPaymentDisplay } from '@/components/pos/qris-payment-display';
 import {
   CombinationPaymentForm,
+  TransferBankInfo,
   type CombinationFormState,
 } from '@/components/pos/combination-payment-form';
 import { usePosDraftStore } from '@/stores/pos-draft-store';
@@ -343,6 +344,9 @@ export function POSPanel({ services, branchName, branchPhone }: POSPanelProps) {
             <>
               {paymentMethod === 'QRIS' && total > 0 && (
                 <QrisPaymentDisplay amount={total} label="QRIS — scan dengan nominal total transaksi" />
+              )}
+              {paymentMethod === 'BANK_TRANSFER' && total > 0 && (
+                <TransferBankInfo amount={total} />
               )}
               {needsProof && (
                 <PaymentProofCapture

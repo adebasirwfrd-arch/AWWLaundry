@@ -10,7 +10,7 @@ import {
   BUILDING_STATUS_LABELS,
 } from '@/lib/capex-asset';
 import { deriveMachineCondition } from '@/lib/machine-condition';
-import { parseCustomerPaymentFromNotes } from '@/lib/payment-plan';
+import { resolveOrderCustomerPayment } from '@/lib/payment-plan';
 import { hasOrgWideBranchAccess } from '@/lib/branch-access';
 
 const BOARD_ROLES = [Role.WORKER, Role.MANAGER, Role.OWNER, Role.SUPER_ADMIN, Role.CASHIER];
@@ -72,7 +72,7 @@ export async function getProductionBoardData(branchId: string) {
     (o) =>
       o.paymentStatus === 'PAID' ||
       o.paymentStatus === 'PARTIAL' ||
-      (o.paymentStatus === 'UNPAID' && parseCustomerPaymentFromNotes(o.notes)?.mode === 'PAY_LATER')
+      (o.paymentStatus === 'UNPAID' && resolveOrderCustomerPayment(o)?.mode === 'PAY_LATER')
   );
 
   return {
