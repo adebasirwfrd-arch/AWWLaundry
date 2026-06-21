@@ -41,11 +41,17 @@ export interface ReceiptData {
 export function ThermalReceipt({ data }: { data: ReceiptData }) {
   const line = '--------------------------------';
   const statusLabel =
-    data.paymentStatus === 'PARTIAL'
-      ? 'DP DITERIMA'
-      : data.paid
-        ? `LUNAS (${data.paymentMethod ?? 'TUNAI'})`
-        : 'BELUM BAYAR';
+    data.orderStatus === 'ON_HOLD'
+      ? data.paymentStatus === 'PARTIAL'
+        ? 'DP DITERIMA · TUNGGU KONFIRMASI'
+        : data.paid || data.paymentStatus === 'PAID'
+          ? 'BAYAR TERCATAT · TUNGGU KONFIRMASI'
+          : 'MENUNGGU KONFIRMASI KASIR'
+      : data.paymentStatus === 'PARTIAL'
+        ? 'DP DITERIMA'
+        : data.paid
+          ? `LUNAS (${data.paymentMethod ?? 'TUNAI'})`
+          : 'BELUM BAYAR';
 
   return (
     <div className="thermal-receipt">

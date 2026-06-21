@@ -69,6 +69,8 @@ function mapMachineTroubleRow(r: {
 export default async function CashierInboxPage() {
   const session = await requireAuth(INBOX_ROLES);
   const isWorker = session.user.role === Role.WORKER;
+  const isOrgWideInbox =
+    session.user.role === Role.OWNER || session.user.role === Role.SUPER_ADMIN;
   const hasInventoryInbox =
     session.user.role === Role.CASHIER ||
     session.user.role === Role.MANAGER ||
@@ -82,10 +84,13 @@ export default async function CashierInboxPage() {
     isWorker
       ? Promise.resolve([])
       : prisma.order.findMany({
-          where: { branchId: session.user.branchId, status: 'ON_HOLD' },
+          where: isOrgWideInbox
+            ? { branch: { organizationId: session.user.organizationId }, status: 'ON_HOLD' }
+            : { branchId: session.user.branchId, status: 'ON_HOLD' },
           orderBy: { createdAt: 'desc' },
           include: {
             customer: { select: { name: true } },
+            branch: { select: { name: true, code: true } },
             serviceType: { select: { name: true, pricePerKg: true } },
             items: { select: { description: true, qty: true, unitPrice: true, total: true } },
             payments: { select: { method: true, amount: true, proofUrl: true } },
@@ -159,6 +164,9 @@ export default async function CashierInboxPage() {
       return {
         id: o.id,
         orderNumber: o.orderNumber,
+        branchName: o.branch.name,
+        branchCode: o.branch.code,
+        fromApp: o.fromApp,
         customerName: o.customer?.name ?? 'Pelanggan',
         serviceName: o.serviceType.name,
         itemCount: o.items.reduce((s, it) => s + it.qty, 0),
@@ -215,7 +223,7 @@ export default async function CashierInboxPage() {
                 <span className="ml-1 rounded-full bg-rainbow-pink px-2 py-0.5 text-xs text-white">{pending.length}</span>
               )}
             </h2>
-            <PendingOrders orders={pendingOrders} />
+            <PendingOrders orders={pendingOrders} showBranch={isOrgWideInbox} />
           </section>
         )}
 

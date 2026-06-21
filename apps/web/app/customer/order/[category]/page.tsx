@@ -27,7 +27,7 @@ export default async function OrderCategoryPage({
     getOrgSettings(orgId),
     prisma.branch.findMany({
       where: { organizationId: orgId, isActive: true },
-      orderBy: { name: 'asc' },
+      orderBy: { code: 'asc' },
       include: {
         branchPricing: serviceType
           ? { where: { serviceTypeId: serviceType.id }, select: { pricePerKg: true } }

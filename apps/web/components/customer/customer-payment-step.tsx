@@ -11,6 +11,7 @@ import {
   CreditCard,
   ArrowLeft,
   Clock,
+  MapPin,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PaymentProofCapture } from '@/components/pos/payment-proof-capture';
@@ -50,6 +51,7 @@ export interface CustomerPaymentStepResult extends CustomerOrderPaymentInput {}
 interface CustomerPaymentStepProps {
   totalPrice: number;
   branchId: string;
+  branchName: string;
   summaryLabel: string;
   loading: boolean;
   onBack: () => void;
@@ -63,6 +65,7 @@ function rupiah(n: number) {
 export function CustomerPaymentStep({
   totalPrice,
   branchId,
+  branchName,
   summaryLabel,
   loading,
   onBack,
@@ -166,6 +169,13 @@ export function CustomerPaymentStep({
         <h2 className="font-display text-xl font-bold text-brand-navy">Metode Pembayaran</h2>
         <p className="mt-1 text-sm text-brand-navy/55">
           {summaryLabel} · Estimasi <strong className="text-brand-orange">{rupiah(totalPrice)}</strong>
+        </p>
+      </div>
+
+      <div className="flex items-start gap-2 rounded-2xl border border-rainbow-cyan/25 bg-brand-sky/10 px-4 py-3 text-sm text-brand-navy/75">
+        <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-rainbow-cyan" />
+        <p>
+          Cabang: <strong className="text-brand-navy">{branchName}</strong> — konfirmasi kasir di cabang ini setelah pesanan terkirim.
         </p>
       </div>
 

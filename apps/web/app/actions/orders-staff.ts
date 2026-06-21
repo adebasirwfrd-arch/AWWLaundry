@@ -33,7 +33,8 @@ async function loadOrderForStaff(orderId: string, branchId: string) {
   return order;
 }
 
-function isKiloanOrder(items: { description: string }[]) {
+function isKiloanOrder(items: { description: string }[], weightKg = 0) {
+  if (weightKg > 0 && items.length === 0) return true;
   return items.some((i) => i.description.toLowerCase().includes('kiloan'));
 }
 
@@ -69,7 +70,7 @@ export async function confirmOrderWithPayment(input: {
     throw new Error('Gunakan kombinasi pembayaran atau metode tunggal, bukan keduanya');
   }
 
-  const kiloan = isKiloanOrder(order.items);
+  const kiloan = isKiloanOrder(order.items, order.weightKg);
   let weightKg = order.weightKg;
   let finalTotal = order.total;
 
@@ -164,7 +165,7 @@ export async function confirmOrderWithPayment(input: {
     }
 
     const statusNote = prepaidViaApp
-      ? `Dikonfirmasi kasir · Pembayaran via app sudah tercatat (${formatCurrency(existingPaid)}${existingPaid < finalTotal ? ` · sisa ${formatCurrency(finalTotal - existingPaid)}` : ''})${kiloan && weightKg ? ` · ${weightKg} kg` : ''}`
+      ? `Dikonfirmasi kasir · Pembayaran ${order.fromApp ? 'via app' : 'di kasir'} sudah tercatat (${formatCurrency(existingPaid)}${existingPaid < finalTotal ? ` · sisa ${formatCurrency(finalTotal - existingPaid)}` : ''})${kiloan && weightKg ? ` · ${weightKg} kg` : ''}`
       : payLaterViaApp
         ? `Dikonfirmasi kasir · Bayar nanti setelah cucian selesai · ${formatCurrency(finalTotal)}${kiloan && weightKg ? ` · ${weightKg} kg` : ''}`
         : isCombination

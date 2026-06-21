@@ -138,6 +138,7 @@ export function POSPanel({ services, branchName, branchPhone }: POSPanelProps) {
       serviceName: order.serviceType.name,
       pricePerKg: selectedService?.pricePerKg,
       estimatedReadyAt: order.estimatedReadyAt?.toISOString() ?? '',
+      orderStatus: 'ON_HOLD',
       paid: pay,
       branchName,
       branchPhone,
@@ -233,6 +234,8 @@ export function POSPanel({ services, branchName, branchPhone }: POSPanelProps) {
       setReceipt(await buildReceiptData(order, pay));
 
       if (pay) setCelebrate(true);
+
+      toast.success('Pesanan masuk Kotak Masuk — buka tab Konfirmasi untuk mulai produksi');
 
       clearDraft();
       setProofUrl(null);
@@ -442,6 +445,11 @@ export function POSPanel({ services, branchName, branchPhone }: POSPanelProps) {
                       ? `LUNAS · ${receipt.paymentMethod}`
                       : 'BELUM BAYAR'}
                 </span>
+                {receipt.orderStatus === 'ON_HOLD' && (
+                  <p className="mt-2 text-xs font-medium text-amber-700">
+                    Menunggu konfirmasi di Kotak Masuk sebelum masuk produksi
+                  </p>
+                )}
 
                 <div className="mt-4 flex justify-center">
                   <div className="rounded-xl bg-white p-2 shadow-aww-sm">

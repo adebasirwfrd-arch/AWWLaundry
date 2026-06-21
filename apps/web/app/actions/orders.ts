@@ -142,17 +142,28 @@ export async function createOrder(data: {
         estimatedReadyAt: estimatedReady,
         createdById: userId,
         notes: orderNotes,
+        status: 'ON_HOLD',
         statusLogs: {
           create: {
             fromStatus: null,
-            toStatus: 'RECEIVED',
+            toStatus: 'ON_HOLD',
             changedById: userId,
             note: isCombination
               ? combinationPlan!.paymentStatus === 'PARTIAL'
-                ? `DP ${combinationPlan!.dpAmount} diterima — sisa ${combinationPlan!.remainingAmount} via ${data.combinationPayment!.remainingMethod} (bayar setelah selesai)`
-                : `Kombinasi lunas — DP ${combinationPlan!.dpAmount} + pelunasan ${combinationPlan!.remainingAmount}`
-              : 'Order diterima di kasir',
+                ? `Dicatat di kasir · DP ${combinationPlan!.dpAmount} — menunggu konfirmasi · sisa ${combinationPlan!.remainingAmount} nanti`
+                : `Dicatat di kasir · kombinasi lunas — menunggu konfirmasi`
+              : data.paymentMethod
+                ? `Dicatat di kasir · pembayaran ${data.paymentMethod} — menunggu konfirmasi`
+                : 'Dicatat di kasir · bayar nanti — menunggu konfirmasi',
           },
+        },
+        items: {
+          create: [{
+            description: `Kiloan ${data.weightKg} kg (${service?.name ?? 'Laundry'})`,
+            qty: 1,
+            unitPrice: subtotal,
+            total: subtotal,
+          }],
         },
         payments: paymentCreates ? { create: paymentCreates } : undefined,
         paymentStatus,
@@ -163,10 +174,6 @@ export async function createOrder(data: {
         branch: true,
       },
     });
-
-    if (paymentStatus === 'PAID' && data.weightKg > 0) {
-      await awardLoyaltyPointsForOrder(tx, created.id, customer.id, data.weightKg);
-    }
 
     return created;
   });
@@ -210,6 +217,7 @@ export async function createOrder(data: {
   }).catch(() => {});
 
   revalidatePath('/cashier');
+  revalidatePath('/cashier/inbox');
   revalidatePath('/owner/orders');
   revalidatePath(`/orders/${order.id}`);
   revalidatePath('/owner');

@@ -26,6 +26,9 @@ import { toast } from '@/lib/toast';
 interface PendingOrder {
   id: string;
   orderNumber: string;
+  branchName?: string;
+  branchCode?: string;
+  fromApp?: boolean;
   customerName: string;
   serviceName: string;
   itemCount: number;
@@ -83,7 +86,12 @@ function getInboxPaymentBadge(o: PendingOrder) {
     };
   }
   if (paid > 0) {
-    return { text: 'Bayar via app · perlu konfirmasi', tone: 'paid' as const };
+    return {
+      text: o.fromApp || o.customerPayment
+        ? 'Bayar via app · perlu konfirmasi'
+        : 'Bayar di kasir · perlu konfirmasi',
+      tone: 'paid' as const,
+    };
   }
   if (isCombination && plan) {
     return { text: `Kombinasi DP · ${formatCurrency(plan.dpAmount)}`, tone: 'plan' as const };
@@ -99,7 +107,13 @@ const BADGE_TONE_CLASS = {
   pending: 'bg-amber-400/20 text-amber-700',
 } as const;
 
-export function PendingOrders({ orders }: { orders: PendingOrder[] }) {
+export function PendingOrders({
+  orders,
+  showBranch = false,
+}: {
+  orders: PendingOrder[];
+  showBranch?: boolean;
+}) {
   const [list, setList] = useState(orders);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [paymentMode, setPaymentMode] = useState<'SINGLE' | 'COMBINATION'>('SINGLE');
@@ -346,6 +360,9 @@ export function PendingOrders({ orders }: { orders: PendingOrder[] }) {
                 <div>
                   <p className="font-semibold text-brand-navy">{o.customerName}</p>
                   <p className="font-mono text-[11px] text-brand-navy/45">{o.orderNumber}</p>
+                  {showBranch && o.branchName && (
+                    <p className="mt-0.5 text-[11px] font-medium text-rainbow-cyan">{o.branchName}</p>
+                  )}
                 </div>
               </div>
               <div className="flex flex-col items-end gap-1">
@@ -438,7 +455,7 @@ export function PendingOrders({ orders }: { orders: PendingOrder[] }) {
               {o.payments.length > 0 ? (
                 <div className="space-y-4">
                   <div className="rounded-xl border border-rainbow-green/25 bg-rainbow-green/5 p-4">
-                    <p className="text-sm font-semibold text-brand-navy">Pembayaran sudah dilakukan via aplikasi</p>
+                    <p className="text-sm font-semibold text-brand-navy">Pembayaran sudah tercatat</p>
                     <div className="mt-2 space-y-1 text-sm">
                       {o.payments.map((p, i) => (
                         <div key={i} className="flex justify-between text-brand-navy/75">

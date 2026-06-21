@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Minus, Plus, ShoppingBag, PartyPopper, Receipt, Scale, ChevronDown, MapPin } from 'lucide-react';
@@ -29,6 +29,8 @@ import { Sparkles } from 'lucide-react';
 type OrderMode = 'satuan' | 'kiloan';
 type BuilderStep = 'order' | 'payment';
 
+const BRANCH_STORAGE_KEY = 'aww-customer-branch-id';
+
 function rupiah(n: number) {
   return 'Rp ' + new Intl.NumberFormat('id-ID').format(n);
 }
@@ -50,6 +52,18 @@ export function OrderBuilder({
   const appBonus = loyaltyConfig?.appOrderBonus ?? LOYALTY_APP_ORDER_BONUS;
   const [orderMode, setOrderMode] = useState<OrderMode>('satuan');
   const [branchId, setBranchId] = useState(branches[0]?.id ?? '');
+
+  useEffect(() => {
+    const saved = localStorage.getItem(BRANCH_STORAGE_KEY);
+    if (saved && branches.some((b) => b.id === saved)) {
+      setBranchId(saved);
+    }
+  }, [branches]);
+
+  function selectBranch(nextBranchId: string) {
+    setBranchId(nextBranchId);
+    localStorage.setItem(BRANCH_STORAGE_KEY, nextBranchId);
+  }
   const [weightKg, setWeightKg] = useState('');
   const [redeemPoints, setRedeemPoints] = useState(false);
   const [qty, setQty] = useState<Record<string, number>>(
@@ -160,7 +174,8 @@ export function OrderBuilder({
         </div>
         <h1 className="mt-4 font-display text-2xl font-extrabold text-brand-navy">Pesanan Terkirim! 🎉</h1>
         <p className="mt-2 max-w-xs text-brand-navy/60">
-          Pesanan <span className="font-mono font-semibold">{done.orderNumber}</span> menunggu konfirmasi kasir.
+          Pesanan <span className="font-mono font-semibold">{done.orderNumber}</span> menunggu konfirmasi kasir di{' '}
+          <strong className="text-brand-navy">{done.branchName}</strong>.
           {done.paymentMode === 'CASH'
             ? ' Bayar tunai saat sampai di cabang.'
             : done.paymentMode === 'PAY_LATER'
@@ -195,6 +210,7 @@ export function OrderBuilder({
       <CustomerPaymentStep
         totalPrice={totalPrice}
         branchId={branchId}
+        branchName={selectedBranch?.name ?? 'Cabang'}
         summaryLabel={summaryLabel}
         loading={loading}
         onBack={() => setStep('order')}
@@ -231,7 +247,7 @@ export function OrderBuilder({
           <select
             id="branch-select"
             value={branchId}
-            onChange={(e) => setBranchId(e.target.value)}
+            onChange={(e) => selectBranch(e.target.value)}
             className="h-12 w-full appearance-none rounded-xl border border-brand-navy/15 bg-white px-4 pr-10 text-brand-navy focus:border-rainbow-cyan focus:outline-none focus:ring-2 focus:ring-rainbow-cyan/30"
           >
             {branches.map((b) => (
@@ -242,6 +258,9 @@ export function OrderBuilder({
           </select>
           <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-brand-navy/40" />
         </div>
+        <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Pesanan masuk ke <strong>Kotak Masuk kasir {selectedBranch?.name ?? 'cabang ini'}</strong>. Pastikan cabang sesuai lokasi antar/jemput cucian.
+        </p>
         {orderMode === 'kiloan' && selectedBranch && (
           <p className="mt-2 text-xs text-brand-navy/50">
             Harga di cabang ini: {rupiah(branchPricePerKg)}/kg
