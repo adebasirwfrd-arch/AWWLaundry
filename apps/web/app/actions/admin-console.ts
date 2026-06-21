@@ -12,6 +12,11 @@ import {
   type CatalogItem,
   type LoyaltySettings,
 } from '@/lib/org-settings';
+import {
+  mergeBranchPaymentSettings,
+  parseBranchPaymentSettings,
+  type BranchPaymentSettingsInput,
+} from '@/lib/branch-payment-settings';
 
 const ADMIN_ROLES = [Role.OWNER, Role.SUPER_ADMIN];
 
@@ -68,6 +73,7 @@ export async function loadAdminConsoleData() {
       address: b.address,
       phone: b.phone,
       isActive: b.isActive,
+      paymentSettings: parseBranchPaymentSettings(b.settings),
       pricing: b.branchPricing.map((p) => ({
         id: p.id,
         serviceTypeId: p.serviceTypeId,
@@ -259,17 +265,55 @@ export async function updateServiceType(input: {
   });
   if (!svc) throw new Error('Layanan tidak ditemukan');
 
-  await prisma.serviceType.update({
-    where: { id: input.id },
-    data: {
-      name: input.name,
-      pricePerKg: input.pricePerKg,
-      estimatedHours: input.estimatedHours,
-      isActive: input.isActive,
-    },
+  revalidatePath('/owner/admin-console');
+  revalidatePath('/cashier');
+  return { ok: true };
+}
+
+export async function updateBranchPaymentSettings(
+  branchId: string,
+  input: BranchPaymentSettingsInput
+) {
+  const ctx = await adminCtx();
+  const branch = await prisma.branch.findFirst({
+    where: { id: branchId, organizationId: ctx.organizationId },
   });
+  if (!branch) throw new Error('Cabang tidak ditemukan');
+
+  const qris = input.qris ?? {};
+  const bankTransfer = input.bankTransfer ?? {};
+
+  const opt = (value?: string) => {
+    const trimmed = value?.trim();
+    return trimmed || undefined;
+  };
+
+  const normalized: BranchPaymentSettingsInput = {
+    qris: {
+      merchantPan: opt(qris.merchantPan),
+      merchantName: opt(qris.merchantName),
+      merchantCity: opt(qris.merchantCity),
+      nmid: opt(qris.nmid),
+      mcc: opt(qris.mcc),
+    },
+    bankTransfer: {
+      bankName: opt(bankTransfer.bankName),
+      accountName: opt(bankTransfer.accountName),
+      accountNumber: bankTransfer.accountNumber?.replace(/\s/g, '') || undefined,
+    },
+  };
+
+  const settings = mergeBranchPaymentSettings(branch.settings, normalized);
+
+  await prisma.branch.update({
+    where: { id: branchId },
+    data: { settings },
+  });
+
+  await createAuditLog(ctx, 'SETTINGS_CHANGED', 'BranchPaymentSettings', branchId, branch.settings, settings);
 
   revalidatePath('/owner/admin-console');
   revalidatePath('/cashier');
+  revalidatePath('/customer');
   return { ok: true };
 }

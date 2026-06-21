@@ -31,6 +31,7 @@ import {
   formatPaymentSummary,
   type SplitPaymentMethod,
   type RemainingTiming,
+  type TransferBankDetails,
 } from '@aww/shared';
 
 interface ServiceType {
@@ -43,9 +44,10 @@ interface POSPanelProps {
   services: ServiceType[];
   branchName: string;
   branchPhone?: string;
+  bankDetails?: TransferBankDetails;
 }
 
-export function POSPanel({ services, branchName, branchPhone }: POSPanelProps) {
+export function POSPanel({ services, branchName, branchPhone, bankDetails }: POSPanelProps) {
   const customerName = usePosDraftStore((s) => s.customerName);
   const customerPhone = usePosDraftStore((s) => s.customerPhone);
   const weight = usePosDraftStore((s) => s.weight);
@@ -339,14 +341,20 @@ export function POSPanel({ services, branchName, branchPhone }: POSPanelProps) {
                 setRemainingProofUrl(url);
                 setRemainingProofPreview(preview);
               }}
+              bankDetails={bankDetails}
             />
           ) : (
             <>
+              {paymentMethod === 'BANK_TRANSFER' && (
+                <TransferBankInfo amount={total} bankDetails={bankDetails} />
+              )}
               {paymentMethod === 'QRIS' && total > 0 && (
                 <QrisPaymentDisplay amount={total} label="QRIS — scan dengan nominal total transaksi" />
               )}
-              {paymentMethod === 'BANK_TRANSFER' && total > 0 && (
-                <TransferBankInfo amount={total} />
+              {paymentMethod === 'QRIS' && total <= 0 && (
+                <p className="rounded-xl bg-rainbow-purple/10 px-3 py-2 text-xs text-brand-navy/70">
+                  Masukkan berat cucian — QRIS akan menampilkan nominal sesuai total transaksi.
+                </p>
               )}
               {needsProof && (
                 <PaymentProofCapture

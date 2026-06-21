@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { formatCurrency, formatWeight, ORDER_STATUS_LABELS, PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, getCustomerLaundryStatus, computeRemainingBalance } from '@aww/shared';
+import { formatCurrency, formatWeight, ORDER_STATUS_LABELS, PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, getCustomerLaundryStatus, computeRemainingBalance, type TransferBankDetails } from '@aww/shared';
 import { Package, User, Scale, CreditCard, Clock, Building2, Smartphone, ImageIcon } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { PaymentProofSection } from '@/components/orders/payment-proof-section';
@@ -29,6 +29,7 @@ interface OrderDetail {
   branchName: string;
   branchCode?: string;
   branchPhone?: string | null;
+  bankDetails?: TransferBankDetails;
   createdBy?: string;
   items: { description: string; qty: number; unitPrice: number; total: number }[];
   payments: { method: string; amount: number; paidAt: string; proofUrl?: string | null; receivedBy?: string }[];
@@ -172,6 +173,7 @@ export function OrderDetailView({ order }: { order: OrderDetail }) {
               orderNumber={order.orderNumber}
               total={order.total}
               paidAmount={paidAmount}
+              bankDetails={order.bankDetails}
               onPaid={() => router.refresh()}
             />
           )}

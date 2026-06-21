@@ -15,6 +15,7 @@ import {
   methodNeedsProof,
   computeRemainingBalance,
   type SplitPaymentMethod,
+  type TransferBankDetails,
 } from '@aww/shared';
 
 interface RemainingPaymentFormProps {
@@ -23,6 +24,7 @@ interface RemainingPaymentFormProps {
   total: number;
   paidAmount: number;
   suggestedMethod?: SplitPaymentMethod;
+  bankDetails?: TransferBankDetails;
   onPaid?: () => void;
 }
 
@@ -32,6 +34,7 @@ export function RemainingPaymentForm({
   total,
   paidAmount,
   suggestedMethod,
+  bankDetails,
   onPaid,
 }: RemainingPaymentFormProps) {
   const remaining = computeRemainingBalance(total, paidAmount);
@@ -101,7 +104,7 @@ export function RemainingPaymentForm({
 
       {method === 'BANK_TRANSFER' && (
         <div className="mt-3">
-          <TransferBankInfo amount={remaining} />
+          <TransferBankInfo amount={remaining} bankDetails={bankDetails} />
         </div>
       )}
 

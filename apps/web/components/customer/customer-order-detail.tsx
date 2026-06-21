@@ -16,6 +16,7 @@ import { OrderReviewForm } from '@/components/customer/order-review-form';
 import { isOrderCompleted, ORDER_JOURNEY, JOURNEY_COLORS } from '@/lib/order-journey';
 import { getEffectiveCustomerOrderStatus } from '@aww/shared';
 import { CustomerPaymentInfo } from '@/components/customer/customer-payment-info';
+import type { TransferBankDetails } from '@aww/shared';
 import type { CustomerOrderPaymentInput } from '@aww/shared';
 
 const ICONS = {
@@ -37,6 +38,7 @@ export interface CustomerOrderDetailData {
   customerName: string;
   serviceName: string;
   branch: { name: string; address: string | null; phone: string | null };
+  bankDetails?: TransferBankDetails;
   statusLogs: Array<{ toStatus: string; createdAt: string; note: string | null }>;
   review: { rating: number; note: string | null; createdAt: string } | null;
   paid: boolean;
@@ -151,6 +153,7 @@ export function CustomerOrderDetail({ order }: { order: CustomerOrderDetailData 
       <CustomerPaymentInfo
         paymentStatus={order.paymentStatus}
         customerPayment={order.customerPayment}
+        bankDetails={order.bankDetails}
         payments={order.payments}
         total={order.total}
       />

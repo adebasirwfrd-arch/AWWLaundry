@@ -109,7 +109,13 @@ export interface CustomerOrderPaymentInput {
   combination?: CombinationPaymentInput;
 }
 
-export const TRANSFER_BANK_DETAILS = {
+export interface TransferBankDetails {
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+}
+
+export const TRANSFER_BANK_DETAILS: TransferBankDetails & { formatted: string } = {
   bankName: 'Bank Mandiri',
   accountName: 'AN JOKOVIC',
   accountNumber: '0088474666126',

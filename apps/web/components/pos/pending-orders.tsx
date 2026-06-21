@@ -11,12 +11,14 @@ import {
   type CombinationPaymentInput,
   type CustomerOrderPaymentInput,
   CUSTOMER_PAYMENT_MODE_LABELS,
+  type TransferBankDetails,
 } from '@aww/shared';
 import { confirmOrderWithPayment, rejectOrder, type ConfirmPaymentMethod } from '@/app/actions/orders-staff';
 import { PaymentProofCapture } from '@/components/pos/payment-proof-capture';
 import { QrisPaymentDisplay } from '@/components/pos/qris-payment-display';
 import {
   CombinationPaymentForm,
+  TransferBankInfo,
   type CombinationFormState,
 } from '@/components/pos/combination-payment-form';
 import { Button } from '@/components/ui/button';
@@ -25,6 +27,7 @@ import { toast } from '@/lib/toast';
 
 interface PendingOrder {
   id: string;
+  branchId: string;
   orderNumber: string;
   branchName?: string;
   branchCode?: string;
@@ -110,9 +113,11 @@ const BADGE_TONE_CLASS = {
 export function PendingOrders({
   orders,
   showBranch = false,
+  bankDetailsByBranch = {},
 }: {
   orders: PendingOrder[];
   showBranch?: boolean;
+  bankDetailsByBranch?: Record<string, TransferBankDetails>;
 }) {
   const [list, setList] = useState(orders);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -533,6 +538,8 @@ export function PendingOrders({
                   {paymentMode === 'COMBINATION' ? (
                     <CombinationPaymentForm
                       total={computedTotal}
+                      branchId={o.branchId}
+                      bankDetails={bankDetailsByBranch[o.branchId]}
                       state={combination}
                       onChange={(patch) => setCombination((s) => ({ ...s, ...patch }))}
                       dpProofUrl={dpProofUrl}
@@ -553,8 +560,15 @@ export function PendingOrders({
                       {paymentMethod === 'QRIS' && computedTotal > 0 && (
                         <QrisPaymentDisplay
                           amount={computedTotal}
+                          branchId={o.branchId}
                           reference={o.orderNumber}
                           label="QRIS — scan dengan nominal total"
+                        />
+                      )}
+                      {paymentMethod === 'BANK_TRANSFER' && computedTotal > 0 && (
+                        <TransferBankInfo
+                          amount={computedTotal}
+                          bankDetails={bankDetailsByBranch[o.branchId]}
                         />
                       )}
                       {singleNeedsProof && (

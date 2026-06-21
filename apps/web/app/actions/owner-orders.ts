@@ -7,6 +7,7 @@ import {
   type OrderListFilters,
 } from '@/lib/order-filters';
 import { resolveOrderPaymentProofs } from '@/lib/payment-proof-url';
+import { resolveTransferBankDetails } from '@/lib/branch-payment-settings';
 import { hasOrgWideBranchAccess } from '@/lib/branch-access';
 
 const VIEW_ROLES = [Role.OWNER, Role.SUPER_ADMIN, Role.MANAGER];
@@ -89,7 +90,7 @@ export async function getOrderDetailForStaff(orderId: string) {
     include: {
       customer: true,
       serviceType: true,
-      branch: { select: { name: true, phone: true, code: true } },
+      branch: { select: { name: true, phone: true, code: true, settings: true } },
       items: true,
       payments: {
         orderBy: { paidAt: 'desc' },
@@ -136,6 +137,7 @@ export async function getOrderDetailForStaff(orderId: string) {
     branchName: order.branch.name,
     branchCode: order.branch.code,
     branchPhone: order.branch.phone,
+    bankDetails: resolveTransferBankDetails(order.branch.settings),
     createdBy: order.createdBy.name,
     items: order.items.map((i) => ({
       description: i.description,

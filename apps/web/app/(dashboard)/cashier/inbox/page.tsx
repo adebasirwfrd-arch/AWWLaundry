@@ -12,6 +12,7 @@ import { listPendingOpnameApprovals, listUnfinishedOpnamesForInbox } from '@/app
 import { resolveOrderPaymentPlan, resolveOrderCustomerPayment } from '@/lib/payment-plan';
 import { resolveCustomerPaymentProofs, resolveOrderPaymentProofs } from '@/lib/payment-proof-url';
 import { hasOrgWideBranchAccess, isBranchLockedStaff } from '@/lib/branch-access';
+import { buildBranchPaymentSettingsMap } from '@/lib/branch-payment-settings';
 import { Inbox, MessageSquare, ArrowRight, Star, ClipboardCheck, AlertTriangle } from 'lucide-react';
 
 const INBOX_ROLES = [Role.CASHIER, Role.MANAGER, Role.OWNER, Role.SUPER_ADMIN, Role.WORKER];
@@ -80,7 +81,7 @@ export default async function CashierInboxPage() {
   const canApproveOpname = session.user.role === Role.OWNER || session.user.role === Role.SUPER_ADMIN;
   const canSeeMachineTroubles = canApproveOpname;
 
-  const [pending, recentReviews, recentChats, pendingOpnames, draftOpnames, ownerMachineTroubles, workerMachineReports] =
+  const [pending, recentReviews, recentChats, pendingOpnames, draftOpnames, ownerMachineTroubles, workerMachineReports, orgBranches] =
     await Promise.all([
     isWorker
       ? Promise.resolve([])
@@ -169,7 +170,13 @@ export default async function CashierInboxPage() {
           include: machineLogInclude,
         })
       : Promise.resolve([]),
+    prisma.branch.findMany({
+      where: { organizationId: session.user.organizationId },
+      select: { id: true, settings: true },
+    }),
   ]);
+
+  const bankDetailsByBranch = buildBranchPaymentSettingsMap(orgBranches);
 
   const pendingOrders = await Promise.all(
     pending.map(async (o) => {
@@ -196,6 +203,7 @@ export default async function CashierInboxPage() {
 
       return {
         id: o.id,
+        branchId: o.branchId,
         orderNumber: o.orderNumber,
         branchName: o.branch.name,
         branchCode: o.branch.code,
@@ -256,7 +264,7 @@ export default async function CashierInboxPage() {
                 <span className="ml-1 rounded-full bg-rainbow-pink px-2 py-0.5 text-xs text-white">{pending.length}</span>
               )}
             </h2>
-            <PendingOrders orders={pendingOrders} showBranch={isOrgWideInbox} />
+            <PendingOrders orders={pendingOrders} showBranch={isOrgWideInbox} bankDetailsByBranch={bankDetailsByBranch} />
           </section>
         )}
 

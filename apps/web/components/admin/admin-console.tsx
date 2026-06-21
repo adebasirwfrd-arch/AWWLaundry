@@ -12,6 +12,7 @@ import {
   Save,
   Loader2,
   ChevronRight,
+  CreditCard,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,7 +25,9 @@ import {
   updateServiceType,
 } from '@/app/actions/admin-console';
 import { BranchManager } from '@/components/admin/branch-manager';
+import { BranchPaymentSettingsPanel } from '@/components/admin/branch-payment-settings-panel';
 import type { CatalogCategory, CatalogItem } from '@/lib/org-settings';
+import type { BranchPaymentSettingsInput } from '@/lib/branch-payment-settings';
 
 const ITEM_KEYS = [
   { key: 'kaos', label: 'Kaos / Baju', emoji: '👕' },
@@ -34,7 +37,7 @@ const ITEM_KEYS = [
   { key: 'karpet', label: 'Karpet', emoji: '🧶' },
 ];
 
-type Section = 'catalog' | 'branches' | 'loyalty' | 'org' | 'pos';
+type Section = 'catalog' | 'branches' | 'payment' | 'loyalty' | 'org' | 'pos';
 
 interface AdminData {
   settings: {
@@ -49,6 +52,7 @@ interface AdminData {
     address: string | null;
     phone: string | null;
     isActive: boolean;
+    paymentSettings: BranchPaymentSettingsInput;
     pricing: Array<{
       id: string;
       serviceTypeId: string;
@@ -128,6 +132,7 @@ export function AdminConsole({ data, orgName }: { data: AdminData; orgName: stri
   const sections: { id: Section; label: string; icon: typeof Settings2 }[] = [
     { id: 'catalog', label: 'Katalog Layanan', icon: Layers },
     { id: 'branches', label: 'Cabang & Harga/kg', icon: Building2 },
+    { id: 'payment', label: 'Rekening & QRIS', icon: CreditCard },
     { id: 'pos', label: 'Layanan POS Kasir', icon: Store },
     { id: 'loyalty', label: 'Program Loyalty', icon: Gift },
     { id: 'org', label: 'Organisasi', icon: Settings2 },
@@ -306,6 +311,18 @@ export function AdminConsole({ data, orgName }: { data: AdminData; orgName: stri
             isActive: b.isActive,
           }))}
           serviceTypes={data.serviceTypes}
+        />
+      )}
+
+      {section === 'payment' && (
+        <BranchPaymentSettingsPanel
+          branches={data.branches.map((b) => ({
+            id: b.id,
+            code: b.code,
+            name: b.name,
+            paymentSettings: b.paymentSettings,
+          }))}
+          onMessage={setMessage}
         />
       )}
 

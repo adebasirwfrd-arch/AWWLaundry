@@ -23,6 +23,8 @@ import {
   canRedeemFreeKg,
   redemptionDiscount,
   kgNeededForRedemption,
+  TRANSFER_BANK_DETAILS,
+  type TransferBankDetails,
 } from '@aww/shared';
 import { Sparkles } from 'lucide-react';
 
@@ -42,7 +44,13 @@ export function OrderBuilder({
   loyaltyConfig,
 }: {
   category: CatalogCategory;
-  branches: Array<{ id: string; name: string; address?: string | null; pricePerKg: number }>;
+  branches: Array<{
+    id: string;
+    name: string;
+    address?: string | null;
+    pricePerKg: number;
+    bankDetails?: TransferBankDetails;
+  }>;
   loyaltyPoints?: number;
   loyaltyConfig?: { pointsPerKg: number; appOrderBonus: number; redeemCost: number };
 }) {
@@ -211,6 +219,7 @@ export function OrderBuilder({
         totalPrice={totalPrice}
         branchId={branchId}
         branchName={selectedBranch?.name ?? 'Cabang'}
+        bankDetails={selectedBranch?.bankDetails ?? TRANSFER_BANK_DETAILS}
         summaryLabel={summaryLabel}
         loading={loading}
         onBack={() => setStep('order')}

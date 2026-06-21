@@ -8,6 +8,7 @@ import {
   PAYMENT_STATUS_LABELS,
   CUSTOMER_PAYMENT_MODE_LABELS,
   TRANSFER_BANK_DETAILS,
+  type TransferBankDetails,
   type CustomerOrderPaymentInput,
 } from '@aww/shared';
 import { CopyableAccountNumber } from '@/components/payment/copyable-account-number';
@@ -15,6 +16,7 @@ import { CopyableAccountNumber } from '@/components/payment/copyable-account-num
 interface CustomerPaymentInfoProps {
   paymentStatus: string;
   customerPayment?: CustomerOrderPaymentInput | null;
+  bankDetails?: TransferBankDetails;
   payments: Array<{
     method: string;
     amount: number;
@@ -27,6 +29,7 @@ interface CustomerPaymentInfoProps {
 export function CustomerPaymentInfo({
   paymentStatus,
   customerPayment,
+  bankDetails = TRANSFER_BANK_DETAILS,
   payments,
   total,
 }: CustomerPaymentInfoProps) {
@@ -111,10 +114,10 @@ export function CustomerPaymentInfo({
         {customerPayment?.mode === 'BANK_TRANSFER' && payments.length === 0 && (
           <div className="rounded-xl bg-rainbow-blue/5 px-4 py-3 text-sm">
             <p className="font-semibold text-brand-navy">
-              {TRANSFER_BANK_DETAILS.bankName} · a.n. {TRANSFER_BANK_DETAILS.accountName}
+              {bankDetails.bankName} · a.n. {bankDetails.accountName}
             </p>
             <CopyableAccountNumber
-              value={TRANSFER_BANK_DETAILS.accountNumber}
+              value={bankDetails.accountNumber}
               showHint
               className="mt-2"
             />

@@ -2,6 +2,7 @@ import { requireAuth } from '@/lib/session';
 import { Role } from '@aww/database';
 import { DashboardShell } from '@/components/layout/dashboard-shell';
 import { POSPanel } from '@/components/pos/pos-panel';
+import { resolveTransferBankDetails } from '@/lib/branch-payment-settings';
 import { prisma } from '@aww/database';
 
 export default async function CashierPage() {
@@ -18,7 +19,7 @@ export default async function CashierPage() {
 
   const branch = await prisma.branch.findUnique({
     where: { id: session.user.branchId },
-    select: { phone: true },
+    select: { phone: true, settings: true },
   });
 
   const servicesWithPrice = services.map((s) => {
@@ -38,6 +39,7 @@ export default async function CashierPage() {
         services={servicesWithPrice}
         branchName={session.user.branchName}
         branchPhone={branch?.phone ?? undefined}
+        bankDetails={resolveTransferBankDetails(branch?.settings)}
       />
     </DashboardShell>
   );

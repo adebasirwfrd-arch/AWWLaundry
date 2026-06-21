@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/session';
 import { CustomerOrderDetail } from '@/components/customer/customer-order-detail';
 import { parseCustomerPaymentFromNotes } from '@/lib/payment-plan';
 import { resolveCustomerPaymentProofs, resolveOrderPaymentProofs } from '@/lib/payment-proof-url';
+import { resolveTransferBankDetails } from '@/lib/branch-payment-settings';
 
 export default async function CustomerOrderDetailPage({
   params,
@@ -23,7 +24,7 @@ export default async function CustomerOrderDetailPage({
     where: { orderNumber, customerId: customer.id },
     include: {
       serviceType: { select: { name: true } },
-      branch: { select: { name: true, address: true, phone: true } },
+      branch: { select: { name: true, address: true, phone: true, settings: true } },
       statusLogs: { orderBy: { createdAt: 'asc' }, select: { toStatus: true, createdAt: true, note: true } },
       review: { select: { rating: true, note: true, createdAt: true } },
       payments: {
@@ -50,6 +51,7 @@ export default async function CustomerOrderDetailPage({
         customerName: customer.name,
         serviceName: order.serviceType.name,
         branch: order.branch,
+        bankDetails: resolveTransferBankDetails(order.branch.settings),
         statusLogs: order.statusLogs.map((l) => ({
           toStatus: l.toStatus,
           createdAt: l.createdAt.toISOString(),

@@ -134,6 +134,7 @@ export {
   type PaymentLineItem,
   type CustomerPaymentMode,
   type CustomerOrderPaymentInput,
+  type TransferBankDetails,
   TRANSFER_BANK_DETAILS,
   CUSTOMER_PAYMENT_MODE_LABELS,
   isPayLaterCustomerPayment,

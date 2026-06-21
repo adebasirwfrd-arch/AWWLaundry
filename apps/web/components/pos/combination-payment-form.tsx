@@ -13,6 +13,7 @@ import {
   type SplitPaymentMethod,
   type RemainingTiming,
   TRANSFER_BANK_DETAILS,
+  type TransferBankDetails,
 } from '@aww/shared';
 
 const METHOD_OPTIONS = [
@@ -45,6 +46,8 @@ interface CombinationPaymentFormProps {
   onRemainingProofChange: (url: string | null, preview: string | null) => void;
   /** Untuk QRIS di flow pelanggan (checkout app). */
   branchId?: string;
+  /** Rekening transfer cabang — fallback ke default sistem jika tidak diisi. */
+  bankDetails?: TransferBankDetails;
 }
 
 export function CombinationPaymentForm({
@@ -58,6 +61,7 @@ export function CombinationPaymentForm({
   remainingProofPreview,
   onRemainingProofChange,
   branchId,
+  bankDetails,
 }: CombinationPaymentFormProps) {
   const dpNum = parseFloat(state.dpAmount) || 0;
   const remaining = Math.max(0, Math.round(total - dpNum));
@@ -102,30 +106,36 @@ export function CombinationPaymentForm({
         <p className="text-xs text-amber-600">{validationHint}</p>
       )}
 
+      {state.dpMethod === 'BANK_TRANSFER' && (
+        <TransferBankInfo amount={dpNum > 0 ? dpNum : 0} bankDetails={bankDetails} />
+      )}
+
+      {state.dpMethod === 'QRIS' && dpNum > 0 && (
+        <QrisPaymentDisplay amount={dpNum} branchId={branchId} label="QRIS DP Awal — scan dengan nominal DP" />
+      )}
+
+      {state.dpMethod === 'QRIS' && dpNum <= 0 && (
+        <p className="rounded-xl bg-rainbow-purple/10 px-3 py-2 text-xs text-brand-navy/70">
+          Masukkan jumlah DP awal — QRIS akan menampilkan nominal sesuai jumlah yang diinput.
+        </p>
+      )}
+
+      {dpNeedsProof && dpNum > 0 && (
+        <PaymentProofCapture
+          required
+          category="payment-proof"
+          hint="Foto bukti pembayaran DP awal"
+          proofPreview={dpProofPreview}
+          proofUrl={dpProofUrl}
+          onProofChange={(url, preview) => onDpProofChange(url, preview)}
+        />
+      )}
+
       {dpNum > 0 && dpNum < total && (
         <div className="rounded-xl bg-white/70 px-3 py-2 text-sm">
           <span className="text-brand-navy/60">Sisa pembayaran: </span>
           <span className="font-bold text-brand-orange">{formatCurrency(remaining)}</span>
         </div>
-      )}
-
-      {dpNeedsProof && dpNum > 0 && (
-        <>
-          {state.dpMethod === 'QRIS' && (
-            <QrisPaymentDisplay amount={dpNum} branchId={branchId} label="QRIS DP Awal — scan dengan nominal DP" />
-          )}
-          {state.dpMethod === 'BANK_TRANSFER' && (
-            <TransferBankInfo amount={dpNum} />
-          )}
-          <PaymentProofCapture
-            required
-            category="payment-proof"
-            hint="Foto bukti pembayaran DP awal"
-            proofPreview={dpProofPreview}
-            proofUrl={dpProofUrl}
-            onProofChange={(url, preview) => onDpProofChange(url, preview)}
-          />
-        </>
       )}
 
       {dpNum > 0 && dpNum < total && (
@@ -161,27 +171,27 @@ export function CombinationPaymentForm({
             </p>
           )}
 
+          {state.remainingMethod === 'BANK_TRANSFER' && (
+            <TransferBankInfo amount={remaining} bankDetails={bankDetails} />
+          )}
+
+          {state.remainingMethod === 'QRIS' && state.remainingTiming === 'NOW' && remaining > 0 && (
+            <QrisPaymentDisplay
+              amount={remaining}
+              branchId={branchId}
+              label="QRIS Pelunasan — scan dengan nominal sisa"
+            />
+          )}
+
           {remainingNeedsProof && (
-            <>
-              {state.remainingMethod === 'QRIS' && (
-                <QrisPaymentDisplay
-                  amount={remaining}
-                  branchId={branchId}
-                  label="QRIS Pelunasan — scan dengan nominal sisa"
-                />
-              )}
-              {state.remainingMethod === 'BANK_TRANSFER' && (
-                <TransferBankInfo amount={remaining} />
-              )}
-              <PaymentProofCapture
-                required
-                category="payment-proof"
-                hint="Foto bukti pelunasan sisa"
-                proofPreview={remainingProofPreview}
-                proofUrl={remainingProofUrl}
-                onProofChange={(url, preview) => onRemainingProofChange(url, preview)}
-              />
-            </>
+            <PaymentProofCapture
+              required
+              category="payment-proof"
+              hint="Foto bukti pelunasan sisa"
+              proofPreview={remainingProofPreview}
+              proofUrl={remainingProofUrl}
+              onProofChange={(url, preview) => onRemainingProofChange(url, preview)}
+            />
           )}
         </>
       )}
@@ -189,17 +199,27 @@ export function CombinationPaymentForm({
   );
 }
 
-export function TransferBankInfo({ amount }: { amount: number }) {
+export function TransferBankInfo({
+  amount,
+  bankDetails = TRANSFER_BANK_DETAILS,
+}: {
+  amount: number;
+  bankDetails?: TransferBankDetails;
+}) {
   return (
     <div className="rounded-xl border border-rainbow-blue/20 bg-rainbow-blue/5 p-3 text-sm">
-      <p className="font-semibold text-brand-navy">Transfer ke {TRANSFER_BANK_DETAILS.bankName}</p>
-      <p className="mt-1 text-brand-navy/70">a.n. {TRANSFER_BANK_DETAILS.accountName}</p>
+      <p className="font-semibold text-brand-navy">Transfer ke {bankDetails.bankName}</p>
+      <p className="mt-1 text-brand-navy/70">a.n. {bankDetails.accountName}</p>
       <CopyableAccountNumber
-        value={TRANSFER_BANK_DETAILS.accountNumber}
+        value={bankDetails.accountNumber}
         showHint
         className="mt-1"
       />
-      <p className="mt-1 text-xs text-brand-navy/55">Nominal: {formatCurrency(amount)}</p>
+      {amount > 0 ? (
+        <p className="mt-1 text-xs text-brand-navy/55">Nominal: {formatCurrency(amount)}</p>
+      ) : (
+        <p className="mt-1 text-xs text-brand-navy/55">Nominal mengikuti jumlah transaksi / DP</p>
+      )}
     </div>
   );
 }

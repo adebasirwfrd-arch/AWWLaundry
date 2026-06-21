@@ -30,6 +30,7 @@ import {
   type CustomerOrderPaymentInput,
   type SplitPaymentMethod,
   type RemainingTiming,
+  type TransferBankDetails,
 } from '@aww/shared';
 
 const MODE_OPTIONS: { value: CustomerPaymentMode; label: string; emoji: string }[] = [
@@ -53,6 +54,7 @@ interface CustomerPaymentStepProps {
   totalPrice: number;
   branchId: string;
   branchName: string;
+  bankDetails?: TransferBankDetails;
   summaryLabel: string;
   loading: boolean;
   onBack: () => void;
@@ -67,6 +69,7 @@ export function CustomerPaymentStep({
   totalPrice,
   branchId,
   branchName,
+  bankDetails = TRANSFER_BANK_DETAILS,
   summaryLabel,
   loading,
   onBack,
@@ -239,10 +242,10 @@ export function CustomerPaymentStep({
               Transfer ke Rekening Owner
             </div>
             <div className="mt-4 space-y-2 rounded-2xl bg-white/80 p-4 text-sm">
-              <p><span className="text-brand-navy/50">Bank</span><br /><strong>{TRANSFER_BANK_DETAILS.bankName}</strong></p>
-              <p><span className="text-brand-navy/50">Atas Nama</span><br /><strong>{TRANSFER_BANK_DETAILS.accountName}</strong></p>
+              <p><span className="text-brand-navy/50">Bank</span><br /><strong>{bankDetails.bankName}</strong></p>
+              <p><span className="text-brand-navy/50">Atas Nama</span><br /><strong>{bankDetails.accountName}</strong></p>
               <CopyableAccountNumber
-                value={TRANSFER_BANK_DETAILS.accountNumber}
+                value={bankDetails.accountNumber}
                 showLabel
                 showHint
               />
@@ -316,6 +319,7 @@ export function CustomerPaymentStep({
           <CombinationPaymentForm
             total={totalPrice}
             branchId={branchId}
+            bankDetails={bankDetails}
             state={combination}
             onChange={(patch) => setCombination((s) => ({ ...s, ...patch }))}
             dpProofUrl={dpProofUrl}

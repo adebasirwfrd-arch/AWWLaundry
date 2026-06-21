@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { prisma, Role } from '@aww/database';
 import { requireAuth } from '@/lib/session';
 import { getCategoryForOrg, getOrgSettings } from '@/lib/org-settings';
+import { resolveTransferBankDetails } from '@/lib/branch-payment-settings';
 import { OrderBuilder } from '@/components/customer/order-builder';
 
 export default async function OrderCategoryPage({
@@ -28,7 +29,11 @@ export default async function OrderCategoryPage({
     prisma.branch.findMany({
       where: { organizationId: orgId, isActive: true },
       orderBy: { code: 'asc' },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        settings: true,
         branchPricing: serviceType
           ? { where: { serviceTypeId: serviceType.id }, select: { pricePerKg: true } }
           : { take: 0, select: { pricePerKg: true } },
@@ -41,6 +46,7 @@ export default async function OrderCategoryPage({
     name: b.name,
     address: b.address,
     pricePerKg: b.branchPricing[0]?.pricePerKg ?? serviceType?.pricePerKg ?? cat.pricePerKg,
+    bankDetails: resolveTransferBankDetails(b.settings),
   }));
 
   if (branches.length === 0) notFound();
