@@ -17,6 +17,7 @@ import {
   Legend,
   ComposedChart,
   Line,
+  ReferenceLine,
 } from 'recharts';
 import {
   Filter,
@@ -30,6 +31,7 @@ import {
   TrendingUp,
   Clock,
   Percent,
+  CircleDollarSign,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getOwnerAnalytics } from '@/app/actions/analytics';
@@ -95,6 +97,7 @@ export function OwnerAnalyticsClient({
   }
 
   const periodLabel = PERIOD_LABELS[period];
+  const pnl = data.cashflow.realizedPnl;
   const productionData = data.productionPipeline.map((p) => ({
     name: PRODUCTION_LABELS[p.status] ?? p.status,
     count: p.count,
@@ -240,6 +243,189 @@ export function OwnerAnalyticsClient({
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+        </ChartCard>
+      </div>
+
+      {/* REALIZED PNL — God Tier Chart */}
+      <SectionTitle
+        icon={CircleDollarSign}
+        title="Realized PnL"
+        subtitle={`Uang real vs piutang (Bayar Nanti & DP) — ${periodLabel}`}
+      />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard
+          icon={CircleDollarSign}
+          label="Realized (Tercatat)"
+          value={formatCurrency(pnl.realizedIncome)}
+          color="text-rainbow-green"
+        />
+        <KpiCard
+          icon={Clock}
+          label="Unrealized (Piutang)"
+          value={formatCurrency(pnl.unrealizedIncome)}
+          color="text-brand-orange"
+        />
+        <KpiCard
+          icon={TrendingUp}
+          label="Realized PnL"
+          value={formatCurrency(pnl.realizedPnl)}
+          color={pnl.realizedPnl >= 0 ? 'text-rainbow-cyan' : 'text-red-500'}
+        />
+        <KpiCard
+          icon={Percent}
+          label="Tingkat Realisasi"
+          value={`${pnl.realizationRate}%`}
+          color="text-rainbow-purple"
+        />
+      </div>
+
+      <ChartCard title="Realized PnL Command Center — Tren Harian & Arus Kas" className="overflow-hidden border-2 border-rainbow-cyan/20 bg-gradient-to-br from-brand-sky/5 via-white to-rainbow-green/5">
+        <ResponsiveContainer width="100%" height={360}>
+          <ComposedChart data={pnl.daily} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
+            <defs>
+              <linearGradient id="pnlRealizedGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={palette.rainbow.green} stopOpacity={0.55} />
+                <stop offset="100%" stopColor={palette.rainbow.green} stopOpacity={0.08} />
+              </linearGradient>
+              <linearGradient id="pnlUnrealizedGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={palette.brand.orange} stopOpacity={0.5} />
+                <stop offset="100%" stopColor={palette.brand.orange} stopOpacity={0.06} />
+              </linearGradient>
+              <linearGradient id="pnlExpenseGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#EF4444" stopOpacity={0.35} />
+                <stop offset="100%" stopColor="#EF4444" stopOpacity={0.05} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+            <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
+            <YAxis
+              yAxisId="left"
+              tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+              tick={{ fontSize: 10, fill: '#64748B' }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              yAxisId="right"
+              orientation="right"
+              tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+              tick={{ fontSize: 10, fill: '#64748B' }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <Tooltip
+              contentStyle={{
+                borderRadius: 12,
+                border: '1px solid rgba(27,43,75,0.1)',
+                boxShadow: '0 8px 24px rgba(27,43,75,0.12)',
+              }}
+              formatter={(v: number, name: string) => [formatCurrency(v), name]}
+            />
+            <ReferenceLine yAxisId="left" y={0} stroke="#94A3B8" strokeDasharray="5 5" />
+            <Area
+              yAxisId="left"
+              type="monotone"
+              dataKey="realizedIncome"
+              fill="url(#pnlRealizedGrad)"
+              stroke={palette.rainbow.green}
+              strokeWidth={2}
+              name="Realized (Masuk)"
+            />
+            <Area
+              yAxisId="left"
+              type="monotone"
+              dataKey="unrealizedIncome"
+              fill="url(#pnlUnrealizedGrad)"
+              stroke={palette.brand.orange}
+              strokeWidth={2}
+              name="Unrealized (Piutang)"
+            />
+            <Bar
+              yAxisId="right"
+              dataKey="realizedExpense"
+              fill="url(#pnlExpenseGrad)"
+              stroke="#EF4444"
+              strokeWidth={1}
+              radius={[4, 4, 0, 0]}
+              name="Pengeluaran"
+              barSize={14}
+            />
+            <Line
+              yAxisId="left"
+              type="monotone"
+              dataKey="realizedPnl"
+              stroke={palette.rainbow.cyan}
+              strokeWidth={3}
+              dot={{ r: 3, fill: palette.rainbow.cyan, strokeWidth: 0 }}
+              activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
+              name="Realized PnL"
+            />
+            <Line
+              yAxisId="left"
+              type="monotone"
+              dataKey="bookedOrderValue"
+              stroke={palette.rainbow.purple}
+              strokeWidth={2}
+              strokeDasharray="6 4"
+              dot={false}
+              name="Nilai Order"
+            />
+            <Legend wrapperStyle={{ paddingTop: 12 }} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </ChartCard>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <ChartCard title="Komposisi Realized vs Piutang">
+          <DonutChart
+            data={[
+              { name: 'Realized', value: pnl.realizedIncome },
+              { name: 'Unrealized', value: pnl.unrealizedIncome },
+            ].filter((row) => row.value > 0)}
+            height={240}
+            colors={[palette.rainbow.green, palette.brand.orange]}
+            valueFormatter={(v) => formatCurrency(v)}
+          />
+        </ChartCard>
+
+        <ChartCard title="Piutang per Sumber">
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart
+              data={[
+                { name: 'Bayar Nanti', value: pnl.payLaterOutstanding },
+                { name: 'Sisa DP', value: pnl.dpOutstanding },
+                { name: 'Lainnya', value: pnl.otherOutstanding },
+              ].filter((row) => row.value > 0)}
+            >
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+              <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10 }} />
+              <Tooltip formatter={(v: number) => formatCurrency(v)} />
+              <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                {[palette.rainbow.purple, palette.rainbow.pink, palette.rainbow.yellow].map((color, i) => (
+                  <Cell key={i} fill={color} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        <ChartCard title="Realized vs Piutang per Perilaku">
+          {pnl.breakdown.length > 0 ? (
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={pnl.breakdown} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10 }} />
+                <YAxis type="category" dataKey="label" width={100} tick={{ fontSize: 9 }} />
+                <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                <Bar dataKey="realized" stackId="a" fill={palette.rainbow.green} name="Realized" />
+                <Bar dataKey="unrealized" stackId="a" fill={palette.brand.orange} radius={[0, 6, 6, 0]} name="Piutang" />
+                <Legend />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyChart />
+          )}
         </ChartCard>
       </div>
 

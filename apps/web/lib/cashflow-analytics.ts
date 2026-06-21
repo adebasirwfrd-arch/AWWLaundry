@@ -2,6 +2,7 @@ import { prisma } from '@aww/database';
 import { periodRange, lastNDays, formatDayLabel, type DashboardPeriod } from '@/lib/date-buckets';
 import { daysInRange } from '@/lib/report-periods';
 import { getBranchCashSnapshot } from '@/lib/branch-cash-ledger';
+import { buildRealizedPnlAnalytics } from '@/lib/realized-pnl-analytics';
 
 export interface CashflowFilters {
   organizationId: string;
@@ -76,6 +77,7 @@ export async function fetchCashflowOverview(filters: CashflowFilters) {
     recentPayments,
     branches,
     heatmapPayments,
+    periodOrdersForPnl,
   ] = await Promise.all([
     prisma.payment.aggregate({ where: paymentWhere, _sum: { amount: true }, _count: true }),
     prisma.order.count({
@@ -155,6 +157,21 @@ export async function fetchCashflowOverview(filters: CashflowFilters) {
             : {}),
       },
       select: { paidAt: true, amount: true, branchId: true },
+    }),
+    prisma.order.findMany({
+      where: {
+        ...bf,
+        createdAt: { gte: range.start, lte: range.end },
+        status: { not: 'CANCELLED' },
+      },
+      select: {
+        fromApp: true,
+        paymentStatus: true,
+        total: true,
+        notes: true,
+        createdAt: true,
+        payments: { select: { amount: true, status: true, paidAt: true } },
+      },
     }),
   ]);
 
@@ -245,6 +262,15 @@ export async function fetchCashflowOverview(filters: CashflowFilters) {
 
   const maxHeat = Math.max(1, ...heatmap.flatMap((r) => r.cells.map((c) => c.amount)));
 
+  const realizedPnl = buildRealizedPnlAnalytics({
+    periodOrders: periodOrdersForPnl,
+    chartDays,
+    chartPayments,
+    chartExpenses,
+    realizedIncome: totalIncome,
+    realizedExpense: totalExpense,
+  });
+
   return {
     summary: {
       totalIncome,
@@ -303,6 +329,7 @@ export async function fetchCashflowOverview(filters: CashflowFilters) {
       description: e.description,
     })),
     branches,
+    realizedPnl,
   };
 }
 

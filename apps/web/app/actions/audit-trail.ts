@@ -103,6 +103,24 @@ export async function listAuditTrail(input: {
   const hasMore = rows.length > limit;
   const slice = hasMore ? rows.slice(0, limit) : rows;
 
+  const orderEntityIds = [
+    ...new Set(
+      slice
+        .filter((row) => row.entityType === 'Order' || row.entityType === 'Payment')
+        .map((row) => row.entityId)
+    ),
+  ];
+
+  const orders =
+    orderEntityIds.length > 0
+      ? await prisma.order.findMany({
+          where: { id: { in: orderEntityIds } },
+          select: { id: true, orderNumber: true, total: true },
+        })
+      : [];
+
+  const orderLookupMap = new Map(orders.map((order) => [order.id, order]));
+
   const branches = await prisma.branch.findMany({
     where: { organizationId: session.user.organizationId },
     orderBy: { name: 'asc' },
@@ -110,7 +128,9 @@ export async function listAuditTrail(input: {
   });
 
   return {
-    rows: slice.map(formatAuditRow),
+    rows: slice.map((row) =>
+      formatAuditRow(row, orderLookupMap.get(row.entityId) ?? null)
+    ),
     nextCursor: hasMore ? slice[slice.length - 1]?.id ?? null : null,
     branches,
   };

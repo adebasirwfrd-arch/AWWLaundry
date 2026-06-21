@@ -165,6 +165,25 @@ export function AuditTrailClient({
                       <span className="text-xs text-brand-navy/45">{row.entityType}</span>
                     </div>
                     <p className="mt-1 font-medium text-brand-navy">{row.summary}</p>
+                    {row.details && (
+                      <div className="mt-3 grid gap-2 rounded-xl border border-brand-navy/8 bg-brand-sky/5 p-3 text-xs sm:grid-cols-2">
+                        {row.details.transactionNumber && (
+                          <AuditDetailItem label="No. Transaksi" value={row.details.transactionNumber} mono />
+                        )}
+                        {row.details.transactionMethod && (
+                          <AuditDetailItem label="Metode Transaksi" value={row.details.transactionMethod} />
+                        )}
+                        <AuditDetailItem label="Jenis Transaksi" value={row.details.transactionType} />
+                        {row.details.transactionAmountLabel && (
+                          <AuditDetailItem label="Jumlah Transaksi" value={row.details.transactionAmountLabel} />
+                        )}
+                        <AuditDetailItem
+                          label="Detail Aktivitas"
+                          value={row.details.activityDetail}
+                          className="sm:col-span-2"
+                        />
+                      </div>
+                    )}
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-brand-navy/55">
                       {row.user && (
                         <span className="inline-flex items-center gap-1">
@@ -203,6 +222,25 @@ export function AuditTrailClient({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function AuditDetailItem({
+  label,
+  value,
+  mono = false,
+  className = '',
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-brand-navy/45">{label}</p>
+      <p className={`mt-0.5 text-brand-navy/80 ${mono ? 'font-mono text-[11px]' : ''}`}>{value}</p>
     </div>
   );
 }
