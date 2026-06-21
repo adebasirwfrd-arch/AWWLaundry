@@ -13,7 +13,7 @@ import { createAuditLog, updateDailySummary } from '@/lib/audit';
 import { sumPaidAmount } from '@/lib/payment-behavior-analytics';
 import { notifyCustomerOrderCreated, notifyCustomerOrderStatus } from '@/lib/order-notifications';
 import { awardLoyaltyPointsForOrder, awardAppOrderBonus, refundRedeemedPoints } from '@/lib/loyalty';
-import { embedPaymentPlanInNotes, parseCustomerPaymentFromNotes } from '@/lib/payment-plan';
+import { embedPaymentPlanInNotes, parseCustomerPaymentFromNotes, resolveOrderPaymentPlan } from '@/lib/payment-plan';
 import {
   assertStaffOrderBranchInOrg,
   type StaffSession,
@@ -141,6 +141,17 @@ export async function confirmOrderWithPayment(input: {
       ? embedPaymentPlanInNotes(order.notes, input.combinationPayment!)
       : order.notes;
 
+  const storedPlan = resolveOrderPaymentPlan(
+    finalTotal,
+    order.notes,
+    order.payments.map((p) => ({ method: p.method, amount: p.amount }))
+  );
+  const remainingBalance =
+    combinationPlan?.remainingAmount ??
+    (storedPlan?.remainingTiming === 'LATER'
+      ? Math.max(0, Math.round(finalTotal - (storedPlan.dpAmount ?? existingPaid)))
+      : Math.max(0, Math.round(finalTotal - existingPaid)));
+
   await prisma.$transaction(async (tx) => {
     if (!prepaidViaApp && !payLaterViaApp) {
       if (isCombination) {
@@ -216,7 +227,7 @@ export async function confirmOrderWithPayment(input: {
     : `${order.customer.name} · ${itemCount} item · ${formatCurrency(finalTotal)}`;
 
   const paymentMsg = paymentStatus === 'PARTIAL'
-    ? `DP diterima. Sisa ${formatCurrency(combinationPlan!.remainingAmount)} bayar setelah selesai.`
+    ? `DP diterima. Sisa ${formatCurrency(remainingBalance)} bayar setelah selesai.`
     : payLaterViaApp
       ? 'Cucian diterima — bayar setelah selesai saat pengambilan.'
       : 'Pembayaran lunas.';
@@ -280,24 +291,26 @@ export async function confirmOrderWithPayment(input: {
       total: finalTotal,
     }
   );
-  await createAuditLog(
-    auditCtx,
-    'PAYMENT_RECEIVED',
-    'Payment',
-    order.id,
-    null,
-    isCombination
-      ? {
-          payments: combinationPlan!.payments.map((p) => ({
-            amount: p.amount,
-            method: p.method,
-            label: p.label,
-          })),
-          paymentStatus,
-          orderNumber: order.orderNumber,
-        }
-      : { amount: finalTotal, method: input.paymentMethod, orderNumber: order.orderNumber }
-  );
+  if (!prepaidViaApp && !payLaterViaApp) {
+    await createAuditLog(
+      auditCtx,
+      'PAYMENT_RECEIVED',
+      'Payment',
+      order.id,
+      null,
+      isCombination
+        ? {
+            payments: combinationPlan!.payments.map((p) => ({
+              amount: p.amount,
+              method: p.method,
+              label: p.label,
+            })),
+            paymentStatus,
+            orderNumber: order.orderNumber,
+          }
+        : { amount: finalTotal, method: input.paymentMethod, orderNumber: order.orderNumber }
+    );
+  }
 
   await updateDailySummary(order.branchId);
 

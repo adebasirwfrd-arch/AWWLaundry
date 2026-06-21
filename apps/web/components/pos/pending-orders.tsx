@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { Check, X, Package, Clock, ShoppingBag, Scale, CreditCard, Layers, Hourglass, ImageIcon, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
 import {
   formatCurrency,
@@ -116,6 +116,10 @@ export function PendingOrders({
 }) {
   const [list, setList] = useState(orders);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setList(orders);
+  }, [orders]);
   const [paymentMode, setPaymentMode] = useState<'SINGLE' | 'COMBINATION'>('SINGLE');
   const [paymentMethod, setPaymentMethod] = useState<ConfirmPaymentMethod>('CASH');
   const [combination, setCombination] = useState<CombinationFormState>(defaultCombination);
