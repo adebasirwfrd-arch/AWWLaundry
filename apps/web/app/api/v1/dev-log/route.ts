@@ -1,5 +1,14 @@
 import { NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
 import { reportAwwError } from '@/lib/aww-dev-log';
+
+function clientIp(req: Request) {
+  return (
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+    req.headers.get('x-real-ip') ??
+    undefined
+  );
+}
 
 export async function POST(req: Request) {
   try {
@@ -12,6 +21,8 @@ export async function POST(req: Request) {
     err.name = name;
     if (stack) err.stack = stack;
 
+    const session = await auth().catch(() => null);
+
     await reportAwwError(err, {
       source: 'client',
       location: typeof body.location === 'string' ? body.location : undefined,
@@ -19,10 +30,20 @@ export async function POST(req: Request) {
       routePath: typeof body.pathname === 'string' ? body.pathname : undefined,
       digest: typeof body.digest === 'string' ? body.digest : undefined,
       userAgent: req.headers.get('user-agent') ?? undefined,
+      userId: session?.user?.id,
+      userEmail: session?.user?.email ?? undefined,
+      userRole: session?.user?.role as string | undefined,
+      branchId: session?.user?.branchId,
       extra: {
         component: body.component ?? null,
         boundary: body.boundary ?? null,
-        ...((body.extra && typeof body.extra === 'object') ? body.extra : {}),
+        clientIp: clientIp(req),
+        referer: req.headers.get('referer'),
+        origin: req.headers.get('origin'),
+        acceptLanguage: req.headers.get('accept-language'),
+        contentType: req.headers.get('content-type'),
+        ...(body.extra && typeof body.extra === 'object' ? body.extra : {}),
+        rawPayload: body,
       },
     });
 

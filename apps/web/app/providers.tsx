@@ -4,7 +4,7 @@ import { SessionProvider } from 'next-auth/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ClickBubbleBurst } from '@/components/animations/click-bubble-burst';
-import { NativeAppBootstrap } from '@/components/native-app-bootstrap';
+import { AwwDevLogBootstrap } from '@/components/aww-dev-log-bootstrap';
 import { NativeOverlayGuard } from '@/components/native-overlay-guard';
 import { NativeViewportSync } from '@/components/native-viewport-sync';
 import { WebScrollEnhancer } from '@/components/web-scroll-enhancer';
@@ -30,7 +30,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <SessionProvider>
       <ThemeProvider>
         <QueryClientProvider client={queryClient}>
-          <NativeAppBootstrap />
+          <AwwDevLogBootstrap />
           <NativeViewportSync />
           <WebScrollEnhancer />
           <AppEffects />

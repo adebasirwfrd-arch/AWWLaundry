@@ -4,7 +4,7 @@
  * Dari folder blueprint/aww-laundry:
  *   npm run test:dev-log
  */
-import { reportAwwError } from '@/lib/aww-dev-log';
+import { reportAwwError, AWW_DEV_LOG_RECIPIENT } from '@/lib/aww-dev-log-core';
 
 async function main() {
   const err = new Error('Test error dari AWW Dev Log — abaikan jika ini uji coba');
@@ -26,7 +26,7 @@ async function main() {
     extra: { test: true, note: 'Ini email uji coba AWW Dev Log' },
   });
 
-  console.log('AWW Dev Log test email dispatched to', process.env.OWNER_NOTIFICATION_EMAIL ?? 'ade.basirwfrd@gmail.com');
+  console.log('AWW Dev Log test email dispatched to', AWW_DEV_LOG_RECIPIENT);
 }
 
 main().catch((e) => {

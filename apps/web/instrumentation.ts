@@ -42,7 +42,11 @@ export async function onRequestError(
     userAgent: String(request.headers['user-agent'] ?? ''),
     extra: {
       routerKind: context.routerKind,
-      referer: request.headers.referer ?? null,
+      referer: request.headers['referer'] ?? null,
+      host: request.headers['host'] ?? null,
+      cfIp: request.headers['cf-connecting-ip'] ?? null,
+      xForwardedFor: request.headers['x-forwarded-for'] ?? null,
+      query: request.path.includes('?') ? request.path.split('?')[1] : null,
     },
   });
 }
