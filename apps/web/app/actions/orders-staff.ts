@@ -13,7 +13,12 @@ import { createAuditLog, updateDailySummary } from '@/lib/audit';
 import { sumPaidAmount } from '@/lib/payment-behavior-analytics';
 import { notifyCustomerOrderCreated, notifyCustomerOrderStatus } from '@/lib/order-notifications';
 import { awardLoyaltyPointsForOrder, awardAppOrderBonus, refundRedeemedPoints } from '@/lib/loyalty';
-import { embedPaymentPlanInNotes, resolveOrderCustomerPayment, resolveOrderPaymentPlan } from '@/lib/payment-plan';
+import {
+  embedCustomerPaymentInNotes,
+  embedPaymentPlanInNotes,
+  resolveOrderCustomerPayment,
+  resolveOrderPaymentPlan,
+} from '@/lib/payment-plan';
 import {
   assertStaffOrderBranchInOrg,
   type StaffSession,
@@ -97,8 +102,11 @@ export async function confirmOrderWithPayment(input: {
   const prepaidViaApp = existingPaid > 0;
   const customerPayment = resolveOrderCustomerPayment(order);
   const payLaterViaApp = customerPayment?.mode === 'PAY_LATER';
+  const revisingPayment =
+    payLaterViaApp && (!!input.paymentMethod || isCombination);
+  const collectPaymentNow = !prepaidViaApp && (!payLaterViaApp || revisingPayment);
 
-  if (!prepaidViaApp && !payLaterViaApp) {
+  if (collectPaymentNow) {
     if (!isCombination && !input.paymentMethod) {
       throw new Error('Pilih metode pembayaran');
     }
@@ -119,7 +127,7 @@ export async function confirmOrderWithPayment(input: {
   }
 
   let combinationPlan: ReturnType<typeof computeCombinationPayment> | null = null;
-  if (!prepaidViaApp && isCombination) {
+  if (collectPaymentNow && isCombination) {
     combinationPlan = computeCombinationPayment(finalTotal, input.combinationPayment!);
   }
 
@@ -127,7 +135,7 @@ export async function confirmOrderWithPayment(input: {
     ? existingPaid >= finalTotal
       ? 'PAID'
       : 'PARTIAL'
-    : payLaterViaApp
+    : payLaterViaApp && !revisingPayment
       ? 'UNPAID'
       : isCombination
         ? combinationPlan!.paymentStatus
@@ -136,10 +144,22 @@ export async function confirmOrderWithPayment(input: {
   let pointsEarned = 0;
   let appBonus = 0;
 
-  const orderNotes =
-    !prepaidViaApp && isCombination
-      ? embedPaymentPlanInNotes(order.notes, input.combinationPayment!)
-      : order.notes;
+  let orderNotes = order.notes;
+  if (revisingPayment) {
+    if (isCombination && input.combinationPayment) {
+      orderNotes = embedCustomerPaymentInNotes(order.notes, {
+        mode: 'COMBINATION',
+        combination: input.combinationPayment,
+      });
+    } else if (input.paymentMethod) {
+      orderNotes = embedCustomerPaymentInNotes(order.notes, {
+        mode: input.paymentMethod,
+        proofUrl: input.proofUrl,
+      });
+    }
+  } else if (collectPaymentNow && isCombination) {
+    orderNotes = embedPaymentPlanInNotes(order.notes, input.combinationPayment!);
+  }
 
   const storedPlan = resolveOrderPaymentPlan(
     finalTotal,
@@ -153,7 +173,7 @@ export async function confirmOrderWithPayment(input: {
       : Math.max(0, Math.round(finalTotal - existingPaid)));
 
   await prisma.$transaction(async (tx) => {
-    if (!prepaidViaApp && !payLaterViaApp) {
+    if (collectPaymentNow) {
       if (isCombination) {
         for (const p of combinationPlan!.payments) {
           await tx.payment.create({
@@ -185,9 +205,11 @@ export async function confirmOrderWithPayment(input: {
 
     const statusNote = prepaidViaApp
       ? `Dikonfirmasi kasir · Pembayaran ${order.fromApp ? 'via app' : 'di kasir'} sudah tercatat (${formatCurrency(existingPaid)}${existingPaid < finalTotal ? ` · sisa ${formatCurrency(finalTotal - existingPaid)}` : ''})${kiloan && weightKg ? ` · ${weightKg} kg` : ''}`
-      : payLaterViaApp
+      : payLaterViaApp && !revisingPayment
         ? `Dikonfirmasi kasir · Bayar nanti setelah cucian selesai · ${formatCurrency(finalTotal)}${kiloan && weightKg ? ` · ${weightKg} kg` : ''}`
-        : isCombination
+        : revisingPayment
+          ? `Dikonfirmasi kasir · Revisi metode bayar (dari bayar nanti)${kiloan && weightKg ? ` · ${weightKg} kg` : ''}`
+          : isCombination
         ? combinationPlan!.paymentStatus === 'PARTIAL'
           ? `Dikonfirmasi kasir · DP ${formatCurrency(combinationPlan!.dpAmount)} ${input.combinationPayment!.dpMethod} · sisa ${formatCurrency(combinationPlan!.remainingAmount)} via ${input.combinationPayment!.remainingMethod} (nanti)`
           : `Dikonfirmasi kasir · Kombinasi lunas · DP ${formatCurrency(combinationPlan!.dpAmount)} + pelunasan ${formatCurrency(combinationPlan!.remainingAmount)}`
@@ -228,9 +250,11 @@ export async function confirmOrderWithPayment(input: {
 
   const paymentMsg = paymentStatus === 'PARTIAL'
     ? `DP diterima. Sisa ${formatCurrency(remainingBalance)} bayar setelah selesai.`
-    : payLaterViaApp
+    : payLaterViaApp && !revisingPayment
       ? 'Cucian diterima — bayar setelah selesai saat pengambilan.'
-      : 'Pembayaran lunas.';
+      : revisingPayment
+        ? 'Metode pembayaran direvisi kasir — cucian masuk produksi.'
+        : 'Pembayaran lunas.';
 
   if (order.customer.userId) {
     const bonusParts: string[] = [];
@@ -291,7 +315,7 @@ export async function confirmOrderWithPayment(input: {
       total: finalTotal,
     }
   );
-  if (!prepaidViaApp && !payLaterViaApp) {
+  if (collectPaymentNow) {
     await createAuditLog(
       auditCtx,
       'PAYMENT_RECEIVED',
@@ -320,6 +344,7 @@ export async function confirmOrderWithPayment(input: {
   revalidatePath('/worker');
   revalidatePath('/owner');
   revalidatePath('/owner/orders');
+  revalidatePath('/cashier/orders');
   revalidatePath('/owner/cashflow');
   revalidatePath('/owner/analytics');
   revalidatePath('/owner/audit-trail');

@@ -29,11 +29,13 @@ export function OwnerOrdersList({
   branches,
   serviceTypes,
   showBranchFilter,
+  showBranchColumn = true,
 }: {
   initialOrders: OrderRow[];
   branches: Array<{ id: string; name: string }>;
   serviceTypes: Array<{ id: string; name: string }>;
   showBranchFilter: boolean;
+  showBranchColumn?: boolean;
 }) {
   const router = useRouter();
   const [orders, setOrders] = useState(initialOrders);
@@ -135,7 +137,7 @@ export function OwnerOrdersList({
               <tr className="border-b border-brand-navy/10 bg-brand-sky/5 text-left text-[11px] font-semibold uppercase tracking-wider text-brand-navy/50">
                 <th className="px-4 py-3">No. Order</th>
                 <th className="px-4 py-3">Tanggal</th>
-                <th className="px-4 py-3">Cabang</th>
+                {showBranchColumn && <th className="px-4 py-3">Cabang</th>}
                 <th className="px-4 py-3">Pelanggan</th>
                 <th className="px-4 py-3">Paket</th>
                 <th className="px-4 py-3">Berat</th>
@@ -148,7 +150,7 @@ export function OwnerOrdersList({
             <tbody>
               {orders.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-12 text-center text-brand-navy/45">
+                  <td colSpan={showBranchColumn ? 10 : 9} className="px-4 py-12 text-center text-brand-navy/45">
                     Tidak ada order sesuai filter
                   </td>
                 </tr>
@@ -170,7 +172,9 @@ export function OwnerOrdersList({
                     <td className="px-4 py-3 text-brand-navy/65 whitespace-nowrap">
                       {new Date(o.createdAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}
                     </td>
-                    <td className="px-4 py-3 text-brand-navy/75">{o.branchName}</td>
+                    {showBranchColumn && (
+                      <td className="px-4 py-3 text-brand-navy/75">{o.branchName}</td>
+                    )}
                     <td className="px-4 py-3">
                       <p className="font-medium text-brand-navy">{o.customerName}</p>
                       <p className="text-xs text-brand-navy/45">{o.customerPhone}</p>

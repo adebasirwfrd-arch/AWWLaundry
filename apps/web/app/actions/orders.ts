@@ -223,6 +223,7 @@ export async function createOrder(data: {
   revalidatePath('/cashier/inbox');
   revalidatePath('/cashier/cashflow');
   revalidatePath('/owner/orders');
+  revalidatePath('/cashier/orders');
   revalidatePath(`/orders/${order.id}`);
   revalidatePath('/owner');
   revalidatePath('/owner/cashflow');

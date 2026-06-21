@@ -57,6 +57,7 @@ export function buildOrderListWhere(
     createdAt: { gte: range.start, lte: range.end },
   };
 
+  /** Kasir & manager hanya lihat cabang sendiri — abaikan filter cabang dari client. */
   if (managerBranchId) {
     where.branchId = managerBranchId;
   } else if (filters.branchId) {

@@ -10,17 +10,19 @@ import { resolveOrderPaymentProofs } from '@/lib/payment-proof-url';
 import { resolveTransferBankDetails } from '@/lib/branch-payment-settings';
 import { hasOrgWideBranchAccess } from '@/lib/branch-access';
 
-const VIEW_ROLES = [Role.OWNER, Role.SUPER_ADMIN, Role.MANAGER];
+const VIEW_ROLES = [Role.OWNER, Role.SUPER_ADMIN, Role.MANAGER, Role.CASHIER];
 
 export async function listOwnerOrders(filters: OrderListFilters) {
   const session = await requireAuth(VIEW_ROLES);
-  const managerBranchId =
-    session.user.role === Role.MANAGER ? session.user.branchId : undefined;
+  const lockedBranchId =
+    session.user.role === Role.MANAGER || session.user.role === Role.CASHIER
+      ? session.user.branchId
+      : undefined;
 
   const where = buildOrderListWhere(
     filters,
     session.user.organizationId,
-    managerBranchId
+    lockedBranchId
   );
 
   const [orders, branches, serviceTypes] = await Promise.all([

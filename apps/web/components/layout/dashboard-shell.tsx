@@ -39,6 +39,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { href: '/owner', label: 'Dashboard', icon: LayoutDashboard, roles: [Role.OWNER, Role.SUPER_ADMIN] },
   { href: '/owner/orders', label: 'Order', icon: ClipboardList, roles: [Role.OWNER, Role.SUPER_ADMIN, Role.MANAGER] },
+  { href: '/cashier/orders', label: 'Order', icon: ClipboardList, roles: [Role.CASHIER] },
   { href: '/owner/cashflow', label: 'Cashflow', icon: Landmark, roles: [Role.OWNER, Role.SUPER_ADMIN, Role.MANAGER] },
   { href: '/cashier', label: 'POS Kasir', icon: ShoppingCart, roles: [Role.CASHIER, Role.MANAGER, Role.OWNER] },
   { href: '/cashier/cashflow', label: 'Cashflow', icon: Landmark, roles: [Role.CASHIER] },
@@ -64,9 +65,9 @@ function pickBottomNav(items: NavItem[], role: Role): NavItem[] {
 
   if (role === Role.CASHIER) {
     add('/cashier');
-    add('/worker');
-    add('/cashier/inventory');
     add('/cashier/inbox');
+    add('/cashier/orders');
+    add('/worker');
     return picked.slice(0, 4);
   }
 

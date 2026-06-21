@@ -73,7 +73,7 @@ export function getNotificationLink(type: string, data: string, role: Role): str
   if (type === 'ORDER_RECEIVED') {
     if (role === Role.WORKER) return '/worker';
     if (parsed.orderId) return `/orders/${parsed.orderId}`;
-    return role === Role.CASHIER ? '/cashier' : '/owner/orders';
+    return role === Role.CASHIER ? '/cashier/orders' : '/owner/orders';
   }
 
   if (type === 'ORDER_CONFIRMATION') {

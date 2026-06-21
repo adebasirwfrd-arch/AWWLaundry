@@ -22,27 +22,29 @@ export default async function OrderDetailPage({
 
   const order = await getOrderDetailForStaff(id);
 
+  const ordersListHref =
+    session.user.role === Role.CASHIER
+      ? '/cashier/orders'
+      : session.user.role === Role.WORKER
+        ? '/worker'
+        : session.user.role === Role.OWNER ||
+            session.user.role === Role.SUPER_ADMIN ||
+            session.user.role === Role.MANAGER
+          ? '/owner/orders'
+          : '/owner';
+
   if (!order) {
     return (
       <DashboardShell user={session.user}>
         <p className="text-brand-navy/60">Pesanan tidak ditemukan.</p>
-        <Link href="/owner/orders" className="mt-4 inline-flex items-center gap-2 text-sm text-rainbow-cyan">
+        <Link href={ordersListHref} className="mt-4 inline-flex items-center gap-2 text-sm text-rainbow-cyan">
           <ArrowLeft className="h-4 w-4" /> Kembali ke Order
         </Link>
       </DashboardShell>
     );
   }
 
-  const backHref =
-    session.user.role === Role.WORKER
-      ? '/worker'
-      : session.user.role === Role.CASHIER
-        ? '/cashier/inbox'
-        : session.user.role === Role.OWNER ||
-            session.user.role === Role.SUPER_ADMIN ||
-            session.user.role === Role.MANAGER
-          ? '/owner/orders'
-          : '/owner';
+  const backHref = ordersListHref;
 
   return (
     <DashboardShell user={session.user}>

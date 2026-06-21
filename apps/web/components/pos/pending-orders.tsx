@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
-import { Check, X, Package, Clock, ShoppingBag, Scale, CreditCard, Layers, Hourglass, ImageIcon, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
+import { Check, X, Package, Clock, ShoppingBag, Scale, CreditCard, Layers, Hourglass, ImageIcon, ExternalLink, ChevronDown, ChevronUp, PencilLine } from 'lucide-react';
 import {
   formatCurrency,
   PAYMENT_METHOD_LABELS,
@@ -136,6 +136,8 @@ export function PendingOrders({
   const [dpProofPreview, setDpProofPreview] = useState<string | null>(null);
   const [remainingProofUrl, setRemainingProofUrl] = useState<string | null>(null);
   const [remainingProofPreview, setRemainingProofPreview] = useState<string | null>(null);
+  const [revisionMode, setRevisionMode] = useState(false);
+  const [cashAmount, setCashAmount] = useState('');
   const [pending, startTransition] = useTransition();
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -153,6 +155,12 @@ export function PendingOrders({
   const dpNum = parseFloat(combination.dpAmount) || 0;
   const remainingTotal = Math.max(0, Math.round(computedTotal - dpNum));
   const hasPresetPlan = !!(expanded?.paymentPlan);
+
+  useEffect(() => {
+    if (computedTotal > 0) {
+      setCashAmount(String(computedTotal));
+    }
+  }, [computedTotal, expandedId]);
 
   function applyPaymentPlan(o: PendingOrder) {
     const plan = getDisplayPaymentPlan(o);
@@ -200,8 +208,10 @@ export function PendingOrders({
 
   function openConfirm(o: PendingOrder) {
     setExpandedId(o.id);
+    setRevisionMode(false);
     setVerifiedWeight(o.weightKg > 0 ? String(o.weightKg) : '');
     setVerifiedTotal(String(o.total));
+    setCashAmount(String(o.total));
     setProofUrl(null);
     setProofPreview(null);
     setDpProofUrl(null);
@@ -209,6 +219,29 @@ export function PendingOrders({
     setRemainingProofUrl(null);
     setRemainingProofPreview(null);
     applyPaymentPlan(o);
+  }
+
+  function startRevision(o: PendingOrder) {
+    setRevisionMode(true);
+    setPaymentMode('SINGLE');
+    setPaymentMethod('CASH');
+    setCombination(defaultCombination);
+    setCashAmount(computedTotal > 0 ? String(computedTotal) : '');
+    setProofUrl(null);
+    setProofPreview(null);
+    setDpProofUrl(null);
+    setDpProofPreview(null);
+    setRemainingProofUrl(null);
+    setRemainingProofPreview(null);
+    if (o.customerPayment?.mode === 'COMBINATION' && o.customerPayment.combination) {
+      setPaymentMode('COMBINATION');
+      setCombination({
+        dpMethod: o.customerPayment.combination.dpMethod,
+        dpAmount: String(o.customerPayment.combination.dpAmount),
+        remainingMethod: o.customerPayment.combination.remainingMethod,
+        remainingTiming: o.customerPayment.combination.remainingTiming,
+      });
+    }
   }
 
   function toggleOrder(o: PendingOrder) {
@@ -234,8 +267,14 @@ export function PendingOrders({
 
   const singleNeedsProof = paymentMode === 'SINGLE' && methodNeedsProof(paymentMethod);
 
-  function validateConfirm(prepaid: boolean, payLater: boolean): string | null {
-    if (prepaid || payLater) return null;
+  function validateConfirm(prepaid: boolean, payLaterConfirm: boolean): string | null {
+    if (prepaid || payLaterConfirm) return null;
+    if (computedTotal <= 0) return 'Total tagihan belum valid — periksa berat/total';
+    if (paymentMode === 'SINGLE' && paymentMethod === 'CASH') {
+      const cash = parseFloat(cashAmount) || 0;
+      if (cash <= 0) return 'Masukkan nominal tunai diterima';
+      if (cash !== computedTotal) return 'Nominal tunai harus sesuai total tagihan';
+    }
     if (paymentMode === 'COMBINATION') {
       if (dpNum <= 0) return 'Masukkan jumlah DP awal';
       if (dpNum >= computedTotal) return 'Jumlah DP harus kurang dari total';
@@ -273,12 +312,12 @@ export function PendingOrders({
           const o = snapshot.find((x) => x.id === id);
           if (!o) return;
           const prepaid = getPaidAmount(o) > 0;
-          const payLater = o.customerPayment?.mode === 'PAY_LATER';
-          const err = validateConfirm(prepaid, payLater);
+          const payLaterConfirm = o.customerPayment?.mode === 'PAY_LATER' && !revisionMode;
+          const err = validateConfirm(prepaid, payLaterConfirm);
           if (err) throw new Error(err);
 
           await confirmOrderWithPayment(
-            prepaid || payLater
+            prepaid || payLaterConfirm
               ? {
                   orderId: id,
                   verifiedWeightKg: o.isKiloan ? parseFloat(verifiedWeight) || undefined : undefined,
@@ -308,6 +347,7 @@ export function PendingOrders({
           );
           setList((prev) => prev.filter((x) => x.id !== id));
           setExpandedId(null);
+          setRevisionMode(false);
           toast.success('Pesanan dikonfirmasi');
         } else {
           await rejectOrder(id);
@@ -326,16 +366,129 @@ export function PendingOrders({
     (pending && !!busyId) ||
     (expanded &&
       expanded.payments.length === 0 &&
-      expanded.customerPayment?.mode !== 'PAY_LATER' &&
+      (expanded.customerPayment?.mode !== 'PAY_LATER' || revisionMode) &&
       paymentMode === 'SINGLE' &&
       singleNeedsProof &&
       !proofUrl) ||
     (expanded &&
       expanded.payments.length === 0 &&
-      expanded.customerPayment?.mode !== 'PAY_LATER' &&
+      (expanded.customerPayment?.mode !== 'PAY_LATER' || revisionMode) &&
       paymentMode === 'SINGLE' &&
       !!proofPreview &&
       !proofUrl);
+
+  function renderPaymentEditor(o: PendingOrder) {
+    return (
+      <>
+        {revisionMode && (
+          <p className="rounded-xl border border-rainbow-cyan/30 bg-brand-sky/10 px-3 py-2 text-xs text-brand-navy/75">
+            <PencilLine className="mr-1 inline h-3.5 w-3.5 text-rainbow-cyan" />
+            Revisi metode pembayaran — pelanggan mengubah pilihan saat di kasir.
+          </p>
+        )}
+
+        {hasPresetPlan && !revisionMode && (
+          <p className="rounded-xl bg-brand-sky/10 px-3 py-2 text-xs text-brand-navy/70">
+            Rencana pembayaran sudah tercatat — periksa apakah sudah sesuai, lalu konfirmasi atau tap Revisi.
+          </p>
+        )}
+
+        <div>
+          <p className="mb-2 text-sm font-medium text-brand-navy">Metode Pembayaran</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {SINGLE_OPTIONS.map((opt) => {
+              const active =
+                opt.value === 'COMBINATION'
+                  ? paymentMode === 'COMBINATION'
+                  : paymentMode === 'SINGLE' && paymentMethod === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => selectPaymentOption(opt.value)}
+                  className={`rounded-xl border-2 py-2.5 text-sm font-semibold transition-all ${
+                    active
+                      ? 'border-rainbow-cyan bg-rainbow-cyan/10 text-brand-navy'
+                      : 'border-brand-navy/10 text-brand-navy/60 hover:border-rainbow-cyan/40'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {paymentMode === 'COMBINATION' ? (
+          <CombinationPaymentForm
+            total={computedTotal}
+            branchId={o.branchId}
+            bankDetails={bankDetailsByBranch[o.branchId]}
+            state={combination}
+            onChange={(patch) => setCombination((s) => ({ ...s, ...patch }))}
+            dpProofUrl={dpProofUrl}
+            dpProofPreview={dpProofPreview}
+            onDpProofChange={(url, preview) => {
+              setDpProofUrl(url);
+              setDpProofPreview(preview);
+            }}
+            remainingProofUrl={remainingProofUrl}
+            remainingProofPreview={remainingProofPreview}
+            onRemainingProofChange={(url, preview) => {
+              setRemainingProofUrl(url);
+              setRemainingProofPreview(preview);
+            }}
+          />
+        ) : (
+          <>
+            {paymentMethod === 'CASH' && (
+              <Input
+                id={`cash-${o.id}`}
+                label="Nominal tunai diterima"
+                type="number"
+                min="1"
+                step="1000"
+                value={cashAmount}
+                onChange={(e) => setCashAmount(e.target.value)}
+                placeholder={computedTotal > 0 ? String(computedTotal) : '0'}
+              />
+            )}
+            {paymentMethod === 'QRIS' && computedTotal > 0 && (
+              <QrisPaymentDisplay
+                amount={computedTotal}
+                branchId={o.branchId}
+                reference={o.orderNumber}
+                label="QRIS — scan dengan nominal total"
+              />
+            )}
+            {paymentMethod === 'QRIS' && computedTotal <= 0 && (
+              <p className="rounded-xl bg-rainbow-purple/10 px-3 py-2 text-xs text-brand-navy/70">
+                Periksa berat/total — QRIS akan menampilkan nominal sesuai tagihan.
+              </p>
+            )}
+            {paymentMethod === 'BANK_TRANSFER' && (
+              <TransferBankInfo
+                amount={computedTotal > 0 ? computedTotal : 0}
+                bankDetails={bankDetailsByBranch[o.branchId]}
+              />
+            )}
+            {singleNeedsProof && (
+              <PaymentProofCapture
+                required
+                category="payment-proof"
+                proofPreview={proofPreview}
+                proofUrl={proofUrl}
+                onProofChange={(url, preview) => {
+                  setProofUrl(url);
+                  setProofPreview(preview);
+                }}
+              />
+            )}
+          </>
+        )}
+      </>
+    );
+  }
 
   if (list.length === 0) {
     return (
@@ -487,7 +640,7 @@ export function PendingOrders({
 
                   <PendingOrderProofGallery payments={o.payments} customerPayment={o.customerPayment} />
                 </div>
-              ) : o.customerPayment?.mode === 'PAY_LATER' ? (
+              ) : o.customerPayment?.mode === 'PAY_LATER' && !revisionMode ? (
                 <div className="rounded-xl border border-rainbow-orange/25 bg-rainbow-orange/5 p-4">
                   <p className="flex items-center gap-2 text-sm font-semibold text-brand-navy">
                     <Hourglass className="h-4 w-4 text-rainbow-orange" />
@@ -495,97 +648,14 @@ export function PendingOrders({
                   </p>
                   <p className="mt-2 text-sm text-brand-navy/70">
                     Pelanggan memilih bayar setelah cucian selesai. Verifikasi berat/total, terima cucian,
-                    lalu konfirmasi — pembayaran dilakukan saat pengambilan.
+                    lalu konfirmasi — atau tap <strong>Revisi</strong> jika pelanggan ingin bayar sekarang.
                   </p>
                   <p className="mt-2 text-xs text-brand-navy/55">
                     Metode: {CUSTOMER_PAYMENT_MODE_LABELS.PAY_LATER}
                   </p>
                 </div>
               ) : (
-                <>
-                  {hasPresetPlan && (
-                    <p className="rounded-xl bg-brand-sky/10 px-3 py-2 text-xs text-brand-navy/70">
-                      Rencana pembayaran sudah tercatat — periksa apakah sudah sesuai, lalu konfirmasi.
-                    </p>
-                  )}
-
-                  <div>
-                    <p className="mb-2 text-sm font-medium text-brand-navy">Metode Pembayaran</p>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                      {SINGLE_OPTIONS.map((opt) => {
-                        const active =
-                          opt.value === 'COMBINATION'
-                            ? paymentMode === 'COMBINATION'
-                            : paymentMode === 'SINGLE' && paymentMethod === opt.value;
-                        return (
-                          <button
-                            key={opt.value}
-                            type="button"
-                            onClick={() => selectPaymentOption(opt.value)}
-                            className={`rounded-xl border-2 py-2.5 text-sm font-semibold transition-all ${
-                              active
-                                ? 'border-rainbow-cyan bg-rainbow-cyan/10 text-brand-navy'
-                                : 'border-brand-navy/10 text-brand-navy/60 hover:border-rainbow-cyan/40'
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {paymentMode === 'COMBINATION' ? (
-                    <CombinationPaymentForm
-                      total={computedTotal}
-                      branchId={o.branchId}
-                      bankDetails={bankDetailsByBranch[o.branchId]}
-                      state={combination}
-                      onChange={(patch) => setCombination((s) => ({ ...s, ...patch }))}
-                      dpProofUrl={dpProofUrl}
-                      dpProofPreview={dpProofPreview}
-                      onDpProofChange={(url, preview) => {
-                        setDpProofUrl(url);
-                        setDpProofPreview(preview);
-                      }}
-                      remainingProofUrl={remainingProofUrl}
-                      remainingProofPreview={remainingProofPreview}
-                      onRemainingProofChange={(url, preview) => {
-                        setRemainingProofUrl(url);
-                        setRemainingProofPreview(preview);
-                      }}
-                    />
-                  ) : (
-                    <>
-                      {paymentMethod === 'QRIS' && computedTotal > 0 && (
-                        <QrisPaymentDisplay
-                          amount={computedTotal}
-                          branchId={o.branchId}
-                          reference={o.orderNumber}
-                          label="QRIS — scan dengan nominal total"
-                        />
-                      )}
-                      {paymentMethod === 'BANK_TRANSFER' && computedTotal > 0 && (
-                        <TransferBankInfo
-                          amount={computedTotal}
-                          bankDetails={bankDetailsByBranch[o.branchId]}
-                        />
-                      )}
-                      {singleNeedsProof && (
-                        <PaymentProofCapture
-                          required
-                          category="payment-proof"
-                          proofPreview={proofPreview}
-                          proofUrl={proofUrl}
-                          onProofChange={(url, preview) => {
-                            setProofUrl(url);
-                            setProofPreview(preview);
-                          }}
-                        />
-                      )}
-                    </>
-                  )}
-                </>
+                renderPaymentEditor(o)
               )}
 
               <div className="rounded-xl bg-brand-sky/10 px-4 py-3 text-center">
@@ -617,19 +687,50 @@ export function PendingOrders({
                     <p className="text-xs text-brand-navy/50">
                       {o.payments.length > 0
                         ? 'Total setelah timbang'
-                        : o.customerPayment?.mode === 'PAY_LATER'
+                        : o.customerPayment?.mode === 'PAY_LATER' && !revisionMode
                           ? 'Total tagihan (bayar nanti)'
-                          : 'Total dibayar'}
+                          : revisionMode
+                            ? 'Total tagihan (revisi pembayaran)'
+                            : 'Total dibayar'}
                     </p>
                     <p className="font-display text-2xl font-extrabold text-brand-orange">{formatCurrency(computedTotal)}</p>
                   </>
                 )}
               </div>
 
-              <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" onClick={() => setExpandedId(null)} disabled={pending}>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setExpandedId(null);
+                    setRevisionMode(false);
+                  }}
+                  disabled={pending}
+                >
                   Batal
                 </Button>
+                {o.payments.length === 0 && !revisionMode && (
+                  <Button
+                    variant="secondary"
+                    className="flex-1"
+                    disabled={pending}
+                    onClick={() => startRevision(o)}
+                  >
+                    <PencilLine className="h-4 w-4" />
+                    Revisi
+                  </Button>
+                )}
+                {revisionMode && (
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    disabled={pending}
+                    onClick={() => setRevisionMode(false)}
+                  >
+                    Batal Revisi
+                  </Button>
+                )}
                 <Button
                   variant="rainbow"
                   className="flex-[2]"
@@ -641,9 +742,11 @@ export function PendingOrders({
                     ? 'Memproses...'
                     : o.payments.length > 0
                       ? 'Konfirmasi Pesanan'
-                      : o.customerPayment?.mode === 'PAY_LATER'
+                      : o.customerPayment?.mode === 'PAY_LATER' && !revisionMode
                         ? 'Konfirmasi (Bayar Nanti)'
-                        : 'Konfirmasi & Terima Bayar'}
+                        : revisionMode
+                          ? 'Konfirmasi Revisi'
+                          : 'Konfirmasi & Terima Bayar'}
                 </Button>
               </div>
             </div>
