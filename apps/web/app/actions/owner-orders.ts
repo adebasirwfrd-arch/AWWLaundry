@@ -156,3 +156,34 @@ export async function getOrderDetailForStaff(orderId: string) {
     })),
   };
 }
+
+/** Cari order by nomor (scan barcode / input manual) — kasir hanya cabang sendiri. */
+export async function findOrderIdByNumber(rawCode: string) {
+  const session = await requireAuth(VIEW_ROLES);
+  const orderNumber = rawCode.trim().toUpperCase();
+  if (!orderNumber) throw new Error('Nomor order wajib diisi');
+
+  const lockedBranchId =
+    session.user.role === Role.MANAGER || session.user.role === Role.CASHIER
+      ? session.user.branchId
+      : undefined;
+
+  const order = await prisma.order.findFirst({
+    where: {
+      orderNumber,
+      branch: { organizationId: session.user.organizationId },
+      ...(lockedBranchId ? { branchId: lockedBranchId } : {}),
+    },
+    select: { id: true, orderNumber: true },
+  });
+
+  if (!order) {
+    throw new Error(
+      lockedBranchId
+        ? 'Order tidak ditemukan di cabang Anda'
+        : 'Order tidak ditemukan'
+    );
+  }
+
+  return { id: order.id, orderNumber: order.orderNumber };
+}

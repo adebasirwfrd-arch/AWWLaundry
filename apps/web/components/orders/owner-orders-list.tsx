@@ -1,9 +1,12 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Filter, Loader2, Search, Smartphone, ImageIcon } from 'lucide-react';
-import { listOwnerOrders } from '@/app/actions/owner-orders';
+import { Filter, Loader2, Search, Smartphone, ImageIcon, ScanLine, Barcode } from 'lucide-react';
+import { listOwnerOrders, findOrderIdByNumber } from '@/app/actions/owner-orders';
+import { OrderBarcodeScanner } from '@/components/orders/order-barcode-scanner';
+import { Button } from '@/components/ui/button';
+import { toast } from '@/lib/toast';
 import { StatusBadge } from '@/components/ui/status-badge';
 import {
   formatCurrency,
@@ -40,6 +43,9 @@ export function OwnerOrdersList({
   const router = useRouter();
   const [orders, setOrders] = useState(initialOrders);
   const [pending, startTransition] = useTransition();
+  const [scanOpen, setScanOpen] = useState(false);
+  const [lookupCode, setLookupCode] = useState('');
+  const [lookupPending, setLookupPending] = useState(false);
 
   const [branchId, setBranchId] = useState('');
   const [period, setPeriod] = useState<DashboardPeriod>('month');
@@ -65,8 +71,74 @@ export function OwnerOrdersList({
     });
   }
 
+  async function openOrderByCode(code: string) {
+    const trimmed = code.trim();
+    if (!trimmed) {
+      toast.error('Masukkan nomor order atau scan barcode');
+      return;
+    }
+    setLookupPending(true);
+    try {
+      const { id } = await findOrderIdByNumber(trimmed);
+      setScanOpen(false);
+      router.push(`/orders/${id}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Order tidak ditemukan');
+    } finally {
+      setLookupPending(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
+      <div className="rounded-2xl border border-brand-navy/10 bg-white p-4 shadow-aww-sm">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-brand-navy">
+            <Barcode className="h-4 w-4 text-rainbow-purple" />
+            Cari via Barcode
+          </div>
+          <Button
+            variant="rainbow"
+            size="sm"
+            disabled={lookupPending}
+            onClick={() => setScanOpen(true)}
+          >
+            <ScanLine className="h-4 w-4" />
+            Scan Barcode
+          </Button>
+        </div>
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-navy/35" />
+            <input
+              type="text"
+              value={lookupCode}
+              onChange={(e) => setLookupCode(e.target.value.toUpperCase())}
+              onKeyDown={(e) => e.key === 'Enter' && void openOrderByCode(lookupCode)}
+              placeholder="JKT01-20260621-1667"
+              className="h-10 w-full rounded-xl border border-brand-navy/15 pl-9 pr-3 font-mono text-sm"
+            />
+          </div>
+          <Button
+            variant="outline"
+            disabled={lookupPending}
+            onClick={() => void openOrderByCode(lookupCode)}
+          >
+            {lookupPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Buka'}
+          </Button>
+        </div>
+        <p className="mt-2 text-xs text-brand-navy/45">
+          Scan barcode di struk atau ketik nomor order untuk langsung ke detail transaksi
+        </p>
+      </div>
+
+      <OrderBarcodeScanner
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        onScan={(code) => void openOrderByCode(code)}
+        onScanFailed={() => toast.error('Barcode tidak dikenali — pastikan scan struk AWW Laundry')}
+      />
+
       <div className="rounded-2xl border border-brand-navy/10 bg-white p-4 shadow-aww-sm">
         <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-brand-navy">
           <Filter className="h-4 w-4 text-rainbow-cyan" />

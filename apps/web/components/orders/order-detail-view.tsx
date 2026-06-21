@@ -1,11 +1,13 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatCurrency, formatWeight, ORDER_STATUS_LABELS, PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, getCustomerLaundryStatus, computeRemainingBalance, type TransferBankDetails } from '@aww/shared';
 import { Package, User, Scale, CreditCard, Clock, Building2, Smartphone, ImageIcon } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { PaymentProofSection } from '@/components/orders/payment-proof-section';
 import { RemainingPaymentForm } from '@/components/pos/remaining-payment-form';
+import { buildOrderNotesDisplay } from '@/lib/order-notes-display';
 
 const PROOF_METHODS = new Set(['QRIS', 'BANK_TRANSFER']);
 
@@ -44,6 +46,18 @@ export function OrderDetailView({ order }: { order: OrderDetail }) {
   const remaining = computeRemainingBalance(order.total, paidAmount);
   const hasProof = order.payments.some((p) => p.proofUrl && PROOF_METHODS.has(p.method));
   const missingProof = order.payments.some((p) => PROOF_METHODS.has(p.method) && !p.proofUrl);
+
+  const displayNote = useMemo(
+    () =>
+      buildOrderNotesDisplay({
+        notes: order.notes,
+        fromApp: order.fromApp ?? false,
+        paymentStatus: order.paymentStatus,
+        total: order.total,
+        payments: order.payments.map((p) => ({ method: p.method, amount: p.amount })),
+      }),
+    [order.notes, order.fromApp, order.paymentStatus, order.total, order.payments]
+  );
 
   const paymentBadgeClass = paid
     ? 'bg-rainbow-green/15 text-rainbow-green'
@@ -109,11 +123,10 @@ export function OrderDetailView({ order }: { order: OrderDetail }) {
             <span>Total</span>
             <span className="text-brand-orange">{formatCurrency(order.total)}</span>
           </div>
-          {order.notes && (
-            <p className="mt-3 rounded-xl bg-brand-sky/10 px-3 py-2 text-xs text-brand-navy/60">
-              Catatan: {order.notes}
-            </p>
-          )}
+          <div className="mt-3 rounded-xl bg-brand-sky/10 px-3 py-2 text-xs text-brand-navy/70">
+            <span className="font-semibold text-brand-navy/80">Catatan: </span>
+            {displayNote || '—'}
+          </div>
         </section>
 
         <section className="rounded-3xl border border-brand-navy/10 bg-white/80 p-5 shadow-aww-sm">
