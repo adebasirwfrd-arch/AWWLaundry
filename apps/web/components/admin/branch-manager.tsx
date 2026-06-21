@@ -61,25 +61,34 @@ export function BranchManager({
   const [showNewBranch, setShowNewBranch] = useState(false);
   const [newBranch, setNewBranch] = useState({ code: '', name: '', address: '', phone: '' });
 
+  function applyDetail(d: Awaited<ReturnType<typeof loadBranchDetail>>) {
+    setDetail(d);
+    setBranchForm({
+      code: d.branch.code,
+      name: d.branch.name,
+      address: d.branch.address ?? '',
+      phone: d.branch.phone ?? '',
+      isActive: d.branch.isActive,
+    });
+    const pmap: Record<string, string> = {};
+    for (const svc of serviceTypes) {
+      const o = d.branch.pricing.find((p) => p.serviceTypeId === svc.id);
+      pmap[svc.id] = String(o?.pricePerKg ?? svc.pricePerKg);
+    }
+    setPrices(pmap);
+  }
+
+  async function refreshDetail(id: string) {
+    const d = await loadBranchDetail(id);
+    applyDetail(d);
+    return d;
+  }
+
   function loadDetail(id: string) {
     setSelectedId(id);
     startTransition(async () => {
       try {
-        const d = await loadBranchDetail(id);
-        setDetail(d);
-        setBranchForm({
-          code: d.branch.code,
-          name: d.branch.name,
-          address: d.branch.address ?? '',
-          phone: d.branch.phone ?? '',
-          isActive: d.branch.isActive,
-        });
-        const pmap: Record<string, string> = {};
-        for (const svc of serviceTypes) {
-          const o = d.branch.pricing.find((p) => p.serviceTypeId === svc.id);
-          pmap[svc.id] = String(o?.pricePerKg ?? svc.pricePerKg);
-        }
-        setPrices(pmap);
+        await refreshDetail(id);
       } catch (e) {
         setMessage(e instanceof Error ? e.message : 'Gagal memuat cabang');
       }
@@ -97,7 +106,7 @@ export function BranchManager({
       try {
         await action();
         setMessage(success);
-        if (reload && selectedId) loadDetail(selectedId);
+        if (reload && selectedId) await refreshDetail(selectedId);
       } catch (e) {
         setMessage(e instanceof Error ? e.message : 'Gagal');
       }
@@ -291,15 +300,19 @@ export function BranchManager({
                   size="sm"
                   disabled={pending}
                   onClick={() =>
-                    run(
-                      () =>
-                        createBranchStaff({
-                          branchId: detail.branch.id,
-                          ...staffForm,
-                        }),
-                      'Akun staff dibuat — hanya akses cabang ini',
-                      true
-                    )
+                    run(async () => {
+                      await createBranchStaff({
+                        branchId: detail.branch.id,
+                        ...staffForm,
+                      });
+                      setStaffForm({
+                        name: '',
+                        email: '',
+                        password: '',
+                        role: 'CASHIER',
+                        phone: '',
+                      });
+                    }, 'Akun staff dibuat — hanya akses cabang ini')
                   }
                 >
                   <Shield className="h-4 w-4" /> Buat Akun

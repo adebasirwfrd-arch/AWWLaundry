@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import { prisma, Role } from '@aww/database';
 import { requireAuth } from '@/lib/session';
 import { createAuditLog } from '@/lib/audit';
+import { ensureCustomerFallback } from '@/lib/session-user';
 import { syncCatalogToServiceTypes, getOrgSettings } from '@/lib/org-settings';
 import {
   fetchOwnerDashboardData,
@@ -151,6 +152,8 @@ export async function createBranchStaff(input: {
 }) {
   const ctx = await adminCtx();
   const email = input.email.trim().toLowerCase();
+  const name = input.name.trim();
+  if (name.length < 2) throw new Error('Nama minimal 2 karakter');
   if (input.password.length < 8) throw new Error('Password minimal 8 karakter');
 
   const branch = await prisma.branch.findFirst({
@@ -158,24 +161,63 @@ export async function createBranchStaff(input: {
   });
   if (!branch) throw new Error('Cabang tidak ditemukan');
 
+  const passwordHash = await bcrypt.hash(input.password, 10);
   const existing = await prisma.user.findUnique({ where: { email } });
+
   if (existing) {
+    if (existing.organizationId !== ctx.organizationId) {
+      throw new Error('Email sudah digunakan di organisasi lain');
+    }
+
     const roleOnBranch = await prisma.userBranchRole.findUnique({
       where: { userId_branchId: { userId: existing.id, branchId: branch.id } },
     });
-    if (roleOnBranch) throw new Error('Email sudah terdaftar di cabang ini');
-    await prisma.userBranchRole.create({
-      data: { userId: existing.id, branchId: branch.id, role: input.role },
+
+    if (roleOnBranch && STAFF_ROLES.includes(roleOnBranch.role as (typeof STAFF_ROLES)[number])) {
+      throw new Error('Email sudah terdaftar sebagai staff di cabang ini');
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: existing.id },
+        data: {
+          name,
+          phone: input.phone?.trim() || existing.phone,
+          passwordHash,
+          emailVerified: true,
+          profileCompleted: true,
+          isActive: true,
+        },
+      });
+
+      if (roleOnBranch) {
+        await tx.userBranchRole.update({
+          where: { userId_branchId: { userId: existing.id, branchId: branch.id } },
+          data: { role: input.role },
+        });
+      } else {
+        await tx.userBranchRole.create({
+          data: { userId: existing.id, branchId: branch.id, role: input.role },
+        });
+      }
     });
+
+    await createAuditLog(ctx, 'SETTINGS_CHANGED', 'BranchStaff', existing.id, null, {
+      branchId: branch.id,
+      role: input.role,
+      email,
+      action: roleOnBranch ? 'upgraded' : 'linked',
+    });
+
+    revalidatePath('/owner/admin-console');
     return { ok: true, userId: existing.id };
   }
 
-  const passwordHash = await bcrypt.hash(input.password, 10);
   const user = await prisma.user.create({
     data: {
       organizationId: ctx.organizationId,
       email,
-      name: input.name.trim(),
+      name,
       phone: input.phone?.trim(),
       passwordHash,
       emailVerified: true,
@@ -190,6 +232,7 @@ export async function createBranchStaff(input: {
     branchId: branch.id,
     role: input.role,
     email,
+    action: 'created',
   });
 
   revalidatePath('/owner/admin-console');
@@ -237,13 +280,22 @@ export async function updateBranchStaff(input: {
 
 export async function removeBranchStaff(userId: string, branchId: string) {
   const ctx = await adminCtx();
-  await prisma.userBranchRole.deleteMany({
+  const deleted = await prisma.userBranchRole.deleteMany({
     where: {
       userId,
       branchId,
       user: { organizationId: ctx.organizationId },
     },
   });
+  if (deleted.count === 0) throw new Error('Staff tidak ditemukan di cabang ini');
+
+  await ensureCustomerFallback(userId);
+
+  await createAuditLog(ctx, 'SETTINGS_CHANGED', 'BranchStaff', userId, null, {
+    branchId,
+    action: 'removed',
+  });
+
   revalidatePath('/owner/admin-console');
   return { ok: true };
 }

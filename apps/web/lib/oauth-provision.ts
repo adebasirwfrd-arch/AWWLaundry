@@ -1,4 +1,5 @@
 import { prisma, Role } from '@aww/database';
+import { pickPrimaryBranchRole } from './session-user';
 
 interface GoogleProfile {
   email: string;
@@ -6,6 +7,14 @@ interface GoogleProfile {
   image?: string | null;
   googleId: string;
 }
+
+const STAFF_OR_ADMIN_ROLES = new Set<Role>([
+  Role.SUPER_ADMIN,
+  Role.OWNER,
+  Role.MANAGER,
+  Role.CASHIER,
+  Role.WORKER,
+]);
 
 /** Pastikan user Google punya role cabang + profil pelanggan jika perlu. */
 export async function provisionGoogleUser(profile: GoogleProfile) {
@@ -20,13 +29,17 @@ export async function provisionGoogleUser(profile: GoogleProfile) {
   });
   if (!branch) throw new Error('Cabang tidak ditemukan. Jalankan db:seed.');
 
-  let user = await prisma.user.findUnique({ where: { email: profile.email } });
+  const email = profile.email.trim().toLowerCase();
+  let user = await prisma.user.findUnique({
+    where: { email },
+    include: { branchRoles: { include: { branch: true } }, customer: true },
+  });
 
   if (!user) {
     user = await prisma.user.create({
       data: {
         organizationId: org.id,
-        email: profile.email,
+        email,
         name: profile.name,
         avatarUrl: profile.image ?? undefined,
         googleId: profile.googleId,
@@ -34,6 +47,7 @@ export async function provisionGoogleUser(profile: GoogleProfile) {
         emailVerified: true,
         profileCompleted: false,
       },
+      include: { branchRoles: { include: { branch: true } }, customer: true },
     });
 
     await prisma.userBranchRole.create({
@@ -46,40 +60,59 @@ export async function provisionGoogleUser(profile: GoogleProfile) {
         userId: user.id,
         name: profile.name,
         phone: `USR-${user.id.slice(-8)}`,
-        email: profile.email,
+        email,
       },
     });
-  } else {
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        googleId: user.googleId ?? profile.googleId,
-        avatarUrl: profile.image ?? user.avatarUrl,
-        emailVerified: true,
-        lastLoginAt: new Date(),
-      },
-    });
+    return user;
+  }
 
-    const role = await prisma.userBranchRole.findFirst({ where: { userId: user.id } });
-    if (!role) {
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      googleId: user.googleId ?? profile.googleId,
+      avatarUrl: profile.image ?? user.avatarUrl,
+      emailVerified: true,
+      lastLoginAt: new Date(),
+      authProvider: user.authProvider === 'EMAIL' ? 'EMAIL' : 'GOOGLE',
+    },
+  });
+
+  const refreshed = await prisma.user.findUnique({
+    where: { id: user.id },
+    include: { branchRoles: { include: { branch: true } }, customer: true },
+  });
+  if (!refreshed) return user;
+
+  const primaryRole = pickPrimaryBranchRole(refreshed.branchRoles);
+  const isStaffOrAdmin =
+    primaryRole != null && STAFF_OR_ADMIN_ROLES.has(primaryRole.role);
+
+  if (refreshed.branchRoles.length === 0) {
+    await prisma.userBranchRole.create({
+      data: { userId: refreshed.id, branchId: branch.id, role: Role.CUSTOMER },
+    });
+  }
+
+  if (!isStaffOrAdmin) {
+    const hasCustomerRole = refreshed.branchRoles.some((r) => r.role === Role.CUSTOMER);
+    if (!hasCustomerRole) {
       await prisma.userBranchRole.create({
-        data: { userId: user.id, branchId: branch.id, role: Role.CUSTOMER },
+        data: { userId: refreshed.id, branchId: branch.id, role: Role.CUSTOMER },
       });
     }
 
-    const customer = await prisma.customer.findUnique({ where: { userId: user.id } });
-    if (!customer) {
+    if (!refreshed.customer) {
       await prisma.customer.create({
         data: {
           organizationId: org.id,
-          userId: user.id,
-          name: user.name,
-          phone: user.phone ?? `USR-${user.id.slice(-8)}`,
-          email: user.email,
+          userId: refreshed.id,
+          name: refreshed.name,
+          phone: refreshed.phone ?? `USR-${refreshed.id.slice(-8)}`,
+          email: refreshed.email,
         },
       });
     }
   }
 
-  return user;
+  return refreshed;
 }

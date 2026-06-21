@@ -50,9 +50,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         const user = await prisma.user.findUnique({
           where: { email: credentials.email as string },
-          include: {
-            branchRoles: { include: { branch: true }, take: 1 },
-          },
         });
 
         if (!user?.passwordHash || !user.isActive) return null;
@@ -63,8 +60,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         );
         if (!valid) return null;
 
-        const branchRole = user.branchRoles[0];
-        if (!branchRole) return null;
+        const sessionUser = await loadSessionUserByEmail(user.email);
+        if (!sessionUser) return null;
 
         await prisma.user.update({
           where: { id: user.id },
@@ -72,14 +69,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         });
 
         return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          image: user.avatarUrl,
-          organizationId: user.organizationId,
-          branchId: branchRole.branchId,
-          role: branchRole.role,
-          branchName: branchRole.branch.name,
+          id: sessionUser.id,
+          email: sessionUser.email,
+          name: sessionUser.name,
+          image: sessionUser.image,
+          organizationId: sessionUser.organizationId,
+          branchId: sessionUser.branchId,
+          role: sessionUser.role,
+          branchName: sessionUser.branchName,
         };
       },
     }),
