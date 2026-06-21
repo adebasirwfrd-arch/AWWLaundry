@@ -8,8 +8,10 @@ import { QrisPaymentDisplay } from '@/components/pos/qris-payment-display';
 import {
   formatCurrency,
   methodNeedsProof,
+  computeCombinationPayment,
   type SplitPaymentMethod,
   type RemainingTiming,
+  TRANSFER_BANK_DETAILS,
 } from '@aww/shared';
 
 const METHOD_OPTIONS = [
@@ -40,6 +42,8 @@ interface CombinationPaymentFormProps {
   remainingProofUrl: string | null;
   remainingProofPreview: string | null;
   onRemainingProofChange: (url: string | null, preview: string | null) => void;
+  /** Untuk QRIS di flow pelanggan (checkout app). */
+  branchId?: string;
 }
 
 export function CombinationPaymentForm({
@@ -52,6 +56,7 @@ export function CombinationPaymentForm({
   remainingProofUrl,
   remainingProofPreview,
   onRemainingProofChange,
+  branchId,
 }: CombinationPaymentFormProps) {
   const dpNum = parseFloat(state.dpAmount) || 0;
   const remaining = Math.max(0, Math.round(total - dpNum));
@@ -106,7 +111,10 @@ export function CombinationPaymentForm({
       {dpNeedsProof && dpNum > 0 && (
         <>
           {state.dpMethod === 'QRIS' && (
-            <QrisPaymentDisplay amount={dpNum} label="QRIS DP Awal — scan dengan nominal DP" />
+            <QrisPaymentDisplay amount={dpNum} branchId={branchId} label="QRIS DP Awal — scan dengan nominal DP" />
+          )}
+          {state.dpMethod === 'BANK_TRANSFER' && (
+            <TransferBankInfo amount={dpNum} />
           )}
           <PaymentProofCapture
             required
@@ -157,8 +165,12 @@ export function CombinationPaymentForm({
               {state.remainingMethod === 'QRIS' && (
                 <QrisPaymentDisplay
                   amount={remaining}
+                  branchId={branchId}
                   label="QRIS Pelunasan — scan dengan nominal sisa"
                 />
+              )}
+              {state.remainingMethod === 'BANK_TRANSFER' && (
+                <TransferBankInfo amount={remaining} />
               )}
               <PaymentProofCapture
                 required
@@ -172,6 +184,17 @@ export function CombinationPaymentForm({
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function TransferBankInfo({ amount }: { amount: number }) {
+  return (
+    <div className="rounded-xl border border-rainbow-blue/20 bg-rainbow-blue/5 p-3 text-sm">
+      <p className="font-semibold text-brand-navy">Transfer ke {TRANSFER_BANK_DETAILS.bankName}</p>
+      <p className="mt-1 text-brand-navy/70">a.n. {TRANSFER_BANK_DETAILS.accountName}</p>
+      <p className="font-mono font-bold text-brand-orange">{TRANSFER_BANK_DETAILS.accountNumber}</p>
+      <p className="mt-1 text-xs text-brand-navy/55">Nominal: {formatCurrency(amount)}</p>
     </div>
   );
 }

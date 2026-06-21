@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { prisma, Role } from '@aww/database';
 import { requireAuth } from '@/lib/session';
 import { CustomerOrderDetail } from '@/components/customer/customer-order-detail';
+import { parseCustomerPaymentFromNotes } from '@/lib/payment-plan';
 
 export default async function CustomerOrderDetailPage({
   params,
@@ -24,6 +25,10 @@ export default async function CustomerOrderDetailPage({
       branch: { select: { name: true, address: true, phone: true } },
       statusLogs: { orderBy: { createdAt: 'asc' }, select: { toStatus: true, createdAt: true, note: true } },
       review: { select: { rating: true, note: true, createdAt: true } },
+      payments: {
+        orderBy: { paidAt: 'asc' },
+        select: { method: true, amount: true, proofUrl: true, paidAt: true },
+      },
     },
   });
 
@@ -54,6 +59,14 @@ export default async function CustomerOrderDetailPage({
             }
           : null,
         paid: order.paymentStatus === 'PAID',
+        paymentStatus: order.paymentStatus,
+        customerPayment: parseCustomerPaymentFromNotes(order.notes),
+        payments: order.payments.map((p) => ({
+          method: p.method,
+          amount: p.amount,
+          proofUrl: p.proofUrl,
+          paidAt: p.paidAt.toISOString(),
+        })),
       }}
     />
   );

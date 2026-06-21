@@ -15,6 +15,8 @@ import { Barcode } from '@/components/ui/barcode';
 import { OrderReviewForm } from '@/components/customer/order-review-form';
 import { isOrderCompleted, ORDER_JOURNEY, JOURNEY_COLORS } from '@/lib/order-journey';
 import { getEffectiveCustomerOrderStatus } from '@aww/shared';
+import { CustomerPaymentInfo } from '@/components/customer/customer-payment-info';
+import type { CustomerOrderPaymentInput } from '@aww/shared';
 
 const ICONS = {
   RECEIVED: Package,
@@ -38,11 +40,18 @@ export interface CustomerOrderDetailData {
   statusLogs: Array<{ toStatus: string; createdAt: string; note: string | null }>;
   review: { rating: number; note: string | null; createdAt: string } | null;
   paid: boolean;
+  paymentStatus: string;
+  customerPayment?: CustomerOrderPaymentInput | null;
+  payments: Array<{ method: string; amount: number; proofUrl?: string | null; paidAt?: string }>;
 }
 
 export function CustomerOrderDetail({ order }: { order: CustomerOrderDetailData }) {
-  const displayStatus = getEffectiveCustomerOrderStatus(order.status, order.paid ? 'PAID' : 'UNPAID');
-  const awaitingCashier = !order.paid || order.status === 'ON_HOLD';
+  const displayStatus = getEffectiveCustomerOrderStatus(
+    order.status,
+    order.paymentStatus,
+    order.customerPayment?.mode
+  );
+  const awaitingCashier = order.status === 'ON_HOLD';
   const currentIndex = ORDER_JOURNEY.findIndex((j) => j.status === displayStatus);
   const isPickedUp = displayStatus === 'PICKED_UP' || displayStatus === 'DELIVERED';
   const effectiveIndex = awaitingCashier ? -1 : isPickedUp ? ORDER_JOURNEY.length - 1 : currentIndex;
@@ -67,7 +76,11 @@ export function CustomerOrderDetail({ order }: { order: CustomerOrderDetailData 
         {awaitingCashier ? (
           <div className="mb-5 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
             <p className="font-semibold">{getCustomerLaundryStatus('ON_HOLD')}</p>
-            <p className="mt-1 text-amber-700/80">Kasir akan konfirmasi setelah cucian diterima dan pembayaran selesai.</p>
+            <p className="mt-1 text-amber-700/80">
+              {order.customerPayment?.mode === 'PAY_LATER'
+                ? 'Kasir akan konfirmasi setelah cucian diterima. Pembayaran dilakukan setelah cucian selesai.'
+                : 'Kasir akan konfirmasi setelah cucian diterima dan pembayaran selesai.'}
+            </p>
           </div>
         ) : (
           <p className="mb-4 text-sm font-semibold text-brand-navy">{getCustomerLaundryStatus(displayStatus)}</p>
@@ -134,6 +147,13 @@ export function CustomerOrderDetail({ order }: { order: CustomerOrderDetailData 
           </div>
         </div>
       </div>
+
+      <CustomerPaymentInfo
+        paymentStatus={order.paymentStatus}
+        customerPayment={order.customerPayment}
+        payments={order.payments}
+        total={order.total}
+      />
 
       {/* Barcode */}
       <div className="flex flex-col items-center rounded-2xl border-2 border-dashed border-brand-navy/15 bg-white p-5">

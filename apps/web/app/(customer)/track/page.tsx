@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/button';
 import { Barcode } from '@/components/ui/barcode';
 import { OrderReviewForm } from '@/components/customer/order-review-form';
 import { ORDER_STATUS_LABELS, formatCurrency, formatWeight, getEffectiveCustomerOrderStatus, getCustomerLaundryStatus } from '@aww/shared';
+import { parseCustomerPaymentFromNotes } from '@/lib/payment-plan';
 import { isOrderCompleted } from '@/lib/order-journey';
 
 const JOURNEY = [
@@ -67,6 +68,7 @@ interface TrackResult {
   orderNumber: string;
   status: string;
   paymentStatus: string;
+  notes?: string | null;
   weightKg: number;
   total: number;
   estimatedReadyAt: string | null;
@@ -120,7 +122,12 @@ function TrackContent() {
         if (data.status === 'COMPLETED') setTimeout(() => setCelebrate(true), 600);
       } else {
         setOrder(data as TrackResult);
-        const eff = getEffectiveCustomerOrderStatus(data.status, data.paymentStatus);
+        const customerPayment = parseCustomerPaymentFromNotes(data.notes);
+        const eff = getEffectiveCustomerOrderStatus(
+          data.status,
+          data.paymentStatus,
+          customerPayment?.mode
+        );
         if (data.paymentStatus === 'PAID' && (eff === 'READY' || eff === 'PICKED_UP')) {
           setTimeout(() => setCelebrate(true), 600);
         }
@@ -174,7 +181,11 @@ function TrackContent() {
   }, [order, pickup]);
 
   const trackStatus = order
-    ? getEffectiveCustomerOrderStatus(order.status, order.paymentStatus)
+    ? getEffectiveCustomerOrderStatus(
+        order.status,
+        order.paymentStatus,
+        parseCustomerPaymentFromNotes(order.notes)?.mode
+      )
     : '';
   const currentIndex = order ? JOURNEY.findIndex((j) => j.status === trackStatus) : -1;
   const isPickedUp = trackStatus === 'PICKED_UP';

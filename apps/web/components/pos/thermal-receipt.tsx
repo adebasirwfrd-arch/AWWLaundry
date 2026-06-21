@@ -26,6 +26,7 @@ export interface ReceiptData {
   remainingAmount?: number;
   remainingMethod?: string;
   remainingQrisPayload?: string;
+  paymentMode?: string;
   branchName: string;
   branchPhone?: string;
   trackUrl: string;

@@ -10,6 +10,7 @@ import {
   BUILDING_STATUS_LABELS,
 } from '@/lib/capex-asset';
 import { deriveMachineCondition } from '@/lib/machine-condition';
+import { parseCustomerPaymentFromNotes } from '@/lib/payment-plan';
 
 const BOARD_ROLES = [Role.WORKER, Role.MANAGER, Role.OWNER, Role.SUPER_ADMIN, Role.CASHIER];
 
@@ -54,11 +55,11 @@ export async function listProductionBoardBranches() {
 export async function getProductionBoardData(branchId: string) {
   const { branch } = await assertBranchAccess(branchId);
 
-  const [orders, machines] = await Promise.all([
+  const [rawOrders, machines] = await Promise.all([
     prisma.order.findMany({
       where: {
         branchId,
-        paymentStatus: { in: ['PAID', 'PARTIAL'] },
+        paymentStatus: { in: ['PAID', 'PARTIAL', 'UNPAID'] },
         status: { notIn: ['ON_HOLD', 'PICKED_UP', 'DELIVERED', 'CANCELLED'] },
       },
       include: { customer: true, serviceType: true },
@@ -69,6 +70,13 @@ export async function getProductionBoardData(branchId: string) {
       orderBy: { name: 'asc' },
     }),
   ]);
+
+  const orders = rawOrders.filter(
+    (o) =>
+      o.paymentStatus === 'PAID' ||
+      o.paymentStatus === 'PARTIAL' ||
+      (o.paymentStatus === 'UNPAID' && parseCustomerPaymentFromNotes(o.notes)?.mode === 'PAY_LATER')
+  );
 
   return {
     branch,

@@ -2,13 +2,14 @@
 
 import { revalidatePath } from 'next/cache';
 import { prisma, Role } from '@aww/database';
-import { generateOrderNumber, redemptionDiscount } from '@aww/shared';
+import { generateOrderNumber, redemptionDiscount, computeCombinationPayment, methodNeedsProof, type CustomerOrderPaymentInput } from '@aww/shared';
 import { getOrgSettings } from '@/lib/org-settings';
 import { requireAuth } from '@/lib/session';
 import { getCategoryForOrg } from '@/lib/org-settings';
 import { notifyBranchRoles } from '@/lib/notify';
 import { refundRedeemedPoints } from '@/lib/loyalty';
 import { getBranchPrice } from '@/lib/audit';
+import { embedCustomerPaymentInNotes, parseCustomerPaymentFromNotes } from '@/lib/payment-plan';
 
 /**
  * Find or create the Customer record linked to the logged-in customer user.
@@ -40,6 +41,7 @@ export async function createCustomerOrder(input: {
   weightKg?: number;
   notes?: string;
   redeemPoints?: boolean;
+  payment: CustomerOrderPaymentInput;
 }) {
   const session = await requireAuth([Role.CUSTOMER]);
   const { id: userId, organizationId } = session.user;
@@ -128,6 +130,45 @@ export async function createCustomerOrder(input: {
 
   const estimatedReadyAt = new Date(Date.now() + cat.estimatedHours * 3600 * 1000);
 
+  const payment = input.payment;
+  if (!payment?.mode) throw new Error('Pilih metode pembayaran');
+
+  if (payment.mode === 'QRIS' || payment.mode === 'BANK_TRANSFER') {
+    if (!payment.proofUrl) throw new Error('Upload bukti pembayaran wajib');
+  }
+
+  if (payment.mode === 'COMBINATION') {
+    if (!payment.combination) throw new Error('Lengkapi detail pembayaran kombinasi');
+    const cp = payment.combination;
+    if (cp.dpAmount <= 0 || cp.dpAmount >= total) {
+      throw new Error('Jumlah DP tidak valid');
+    }
+    for (const p of [
+      { method: cp.dpMethod, proof: cp.dpProofUrl, label: 'DP awal' },
+      ...(cp.remainingTiming === 'NOW'
+        ? [{ method: cp.remainingMethod, proof: cp.remainingProofUrl, label: 'Pelunasan' }]
+        : []),
+    ]) {
+      if (methodNeedsProof(p.method) && !p.proof) {
+        throw new Error(`Upload bukti ${p.label} wajib`);
+      }
+    }
+  }
+
+  let combinationPlan: ReturnType<typeof computeCombinationPayment> | null = null;
+  if (payment.mode === 'COMBINATION' && payment.combination) {
+    combinationPlan = computeCombinationPayment(total, payment.combination);
+  }
+
+  const paymentStatus =
+    payment.mode === 'CASH' || payment.mode === 'PAY_LATER'
+      ? 'UNPAID'
+      : payment.mode === 'COMBINATION'
+        ? combinationPlan!.paymentStatus
+        : 'PAID';
+
+  const orderNotes = embedCustomerPaymentInNotes(input.notes, payment);
+
   const order = await prisma.$transaction(async (tx) => {
     if (loyaltyPointsRedeemed > 0) {
       const updated = await tx.customer.updateMany({
@@ -150,21 +191,43 @@ export async function createCustomerOrder(input: {
         total,
         // App orders await cashier confirmation before entering production.
         status: 'ON_HOLD',
-        paymentStatus: 'UNPAID',
+        paymentStatus,
         fromApp: true,
         estimatedReadyAt,
         createdById: userId,
-        notes: input.notes,
+        notes: orderNotes,
         items: {
           create: lineItems,
         },
+        payments:
+          payment.mode === 'CASH' || payment.mode === 'PAY_LATER'
+            ? undefined
+            : payment.mode === 'COMBINATION'
+              ? {
+                  create: combinationPlan!.payments.map((p) => ({
+                    branchId: branch.id,
+                    amount: p.amount,
+                    method: p.method,
+                    receivedById: userId,
+                    status: 'PAID' as const,
+                    proofUrl: p.proofUrl ?? null,
+                  })),
+                }
+              : {
+                  create: {
+                    branchId: branch.id,
+                    amount: total,
+                    method: payment.mode,
+                    receivedById: userId,
+                    status: 'PAID',
+                    proofUrl: payment.proofUrl ?? null,
+                  },
+                },
         statusLogs: {
           create: {
             toStatus: 'ON_HOLD',
             changedById: userId,
-            note: loyaltyPointsRedeemed
-              ? 'Dipesan via aplikasi · redeem 100 poin (gratis 1 kg)'
-              : 'Dipesan via aplikasi pelanggan',
+            note: buildStatusNote(payment, loyaltyPointsRedeemed, combinationPlan),
           },
         },
       },
@@ -199,8 +262,31 @@ export async function createCustomerOrder(input: {
     branchName: branch.name,
     branchPhone: branch.phone ?? undefined,
     estimatedReadyAt: estimatedReadyAt.toISOString(),
+    paymentStatus,
+    paymentMode: payment.mode,
     items: order.items.map((it) => ({ description: it.description, qty: it.qty, total: it.total })),
   };
+}
+
+function buildStatusNote(
+  payment: CustomerOrderPaymentInput,
+  loyaltyRedeemed: number,
+  combinationPlan: ReturnType<typeof computeCombinationPayment> | null
+) {
+  const parts: string[] = ['Dipesan via aplikasi pelanggan'];
+  if (loyaltyRedeemed > 0) parts.push('redeem poin (gratis 1 kg)');
+  if (payment.mode === 'CASH') parts.push('bayar tunai di kasir');
+  else if (payment.mode === 'PAY_LATER') parts.push('bayar nanti setelah cucian selesai');
+  else if (payment.mode === 'QRIS') parts.push('bayar QRIS (bukti diupload)');
+  else if (payment.mode === 'BANK_TRANSFER') parts.push('bayar transfer (bukti diupload)');
+  else if (payment.mode === 'COMBINATION' && combinationPlan) {
+    parts.push(
+      combinationPlan.paymentStatus === 'PARTIAL'
+        ? `kombinasi DP ${combinationPlan.dpAmount} · sisa ${combinationPlan.remainingAmount} nanti`
+        : 'kombinasi lunas via app'
+    );
+  }
+  return parts.join(' · ');
 }
 
 export async function deleteCustomerOrder(orderId: string) {

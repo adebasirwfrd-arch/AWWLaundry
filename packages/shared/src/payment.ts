@@ -100,3 +100,39 @@ export function computeRemainingBalance(
 ): number {
   return Math.max(0, Math.round(total - paidAmount));
 }
+
+export type CustomerPaymentMode = 'CASH' | 'QRIS' | 'BANK_TRANSFER' | 'COMBINATION' | 'PAY_LATER';
+
+export interface CustomerOrderPaymentInput {
+  mode: CustomerPaymentMode;
+  proofUrl?: string;
+  combination?: CombinationPaymentInput;
+}
+
+export const TRANSFER_BANK_DETAILS = {
+  bankName: 'Bank Mandiri',
+  accountName: 'AN JOKOVIC',
+  accountNumber: '0088474666126',
+  formatted: 'Bank Mandiri · a.n. AN JOKOVIC · 0088474666126',
+} as const;
+
+export const CUSTOMER_PAYMENT_MODE_LABELS: Record<CustomerPaymentMode, string> = {
+  CASH: 'Tunai — Bayar di Kasir',
+  QRIS: 'QRIS',
+  BANK_TRANSFER: 'Transfer Bank',
+  COMBINATION: 'Kombinasi (DP)',
+  PAY_LATER: 'Bayar Nanti — setelah selesai',
+};
+
+/** Pesanan bayar nanti boleh masuk produksi meski status UNPAID. */
+export function isPayLaterCustomerPayment(mode: CustomerPaymentMode | undefined | null): boolean {
+  return mode === 'PAY_LATER';
+}
+
+export function canEnterProduction(
+  paymentStatus: string,
+  customerPaymentMode?: CustomerPaymentMode | null
+): boolean {
+  if (paymentStatus === 'UNPAID') return isPayLaterCustomerPayment(customerPaymentMode);
+  return paymentStatus === 'PAID' || paymentStatus === 'PARTIAL';
+}

@@ -30,14 +30,24 @@ export function getCustomerLaundryStatus(status: string): string {
 }
 
 /** Status tampilan pelanggan — produksi hanya setelah kasir konfirmasi terima cucian & bayar. */
-export function getEffectiveCustomerOrderStatus(status: string, paymentStatus: string): string {
+export function getEffectiveCustomerOrderStatus(
+  status: string,
+  paymentStatus: string,
+  customerPaymentMode?: string | null
+): string {
   if (status === 'CANCELLED') return 'CANCELLED';
-  if (status === 'ON_HOLD' || paymentStatus !== 'PAID') return 'ON_HOLD';
+  if (status === 'ON_HOLD') return 'ON_HOLD';
+  if (paymentStatus !== 'PAID' && customerPaymentMode !== 'PAY_LATER') return 'ON_HOLD';
   return status;
 }
 
-export function isOrderInProduction(status: string, paymentStatus: string): boolean {
-  if (paymentStatus === 'UNPAID' || status === 'ON_HOLD' || status === 'CANCELLED') return false;
+export function isOrderInProduction(
+  status: string,
+  paymentStatus: string,
+  customerPaymentMode?: string | null
+): boolean {
+  if (status === 'ON_HOLD' || status === 'CANCELLED') return false;
+  if (paymentStatus === 'UNPAID' && customerPaymentMode !== 'PAY_LATER') return false;
   return (ORDER_STATUS_FLOW as readonly string[]).includes(status) || status === 'DELIVERED';
 }
 
@@ -122,4 +132,10 @@ export {
   type CombinationPaymentInput,
   type CombinationPaymentPlan,
   type PaymentLineItem,
+  type CustomerPaymentMode,
+  type CustomerOrderPaymentInput,
+  TRANSFER_BANK_DETAILS,
+  CUSTOMER_PAYMENT_MODE_LABELS,
+  isPayLaterCustomerPayment,
+  canEnterProduction,
 } from './payment';

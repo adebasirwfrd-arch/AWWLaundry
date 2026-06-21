@@ -7,6 +7,7 @@ import { Role } from '@aww/database';
 const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']);
 
 const STAFF = [Role.CASHIER, Role.MANAGER, Role.OWNER, Role.SUPER_ADMIN];
+const PROOF_UPLOAD_ROLES = [...STAFF, Role.CUSTOMER];
 
 async function saveProofFile(file: File, prefix: string) {
   const mime = file.type || 'image/jpeg';
@@ -23,7 +24,7 @@ async function saveProofFile(file: File, prefix: string) {
 }
 
 export async function uploadPaymentProof(formData: FormData): Promise<string> {
-  await requireAuth(STAFF);
+  await requireAuth(PROOF_UPLOAD_ROLES);
 
   const file = formData.get('file') as File | null;
   if (!file) throw new Error('Foto bukti pembayaran tidak ditemukan');

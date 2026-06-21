@@ -13,6 +13,10 @@ import type { ReceiptData } from '@/components/pos/thermal-receipt';
 import { createCustomerOrder } from '@/app/actions/customer-orders';
 import type { CatalogCategory } from '@/lib/customer-catalog';
 import {
+  CustomerPaymentStep,
+  type CustomerPaymentStepResult,
+} from '@/components/customer/customer-payment-step';
+import {
   LOYALTY_REDEEM_COST,
   LOYALTY_POINTS_PER_KG,
   LOYALTY_APP_ORDER_BONUS,
@@ -23,6 +27,7 @@ import {
 import { Sparkles } from 'lucide-react';
 
 type OrderMode = 'satuan' | 'kiloan';
+type BuilderStep = 'order' | 'payment';
 
 function rupiah(n: number) {
   return 'Rp ' + new Intl.NumberFormat('id-ID').format(n);
@@ -51,6 +56,7 @@ export function OrderBuilder({
     Object.fromEntries(category.items.map((i) => [i.key, 0]))
   );
   const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState<BuilderStep>('order');
   const [celebrate, setCelebrate] = useState(false);
   const [done, setDone] = useState<ReceiptData | null>(null);
   const [showBill, setShowBill] = useState(false);
@@ -89,11 +95,11 @@ export function OrderBuilder({
 
   const canCheckout = (orderMode === 'kiloan' ? weight > 0 : totalItems > 0) && !!branchId;
 
-  async function checkout() {
+  async function checkout(payment: CustomerPaymentStepResult) {
     if (!canCheckout) return;
     setLoading(true);
     try {
-      const base = { category: category.slug, branchId, orderMode } as const;
+      const base = { category: category.slug, branchId, orderMode, payment } as const;
       const res = await createCustomerOrder(
         orderMode === 'kiloan'
           ? { ...base, orderMode: 'kiloan', weightKg: weight, redeemPoints: redeemPoints && redeemEligible }
@@ -117,7 +123,9 @@ export function OrderBuilder({
         customerPhone: res.customerPhone,
         serviceName: res.serviceName,
         estimatedReadyAt: res.estimatedReadyAt,
-        paid: false,
+        paid: res.paymentStatus === 'PAID',
+        paymentStatus: res.paymentStatus as 'PAID' | 'PARTIAL' | 'UNPAID',
+        paymentMode: res.paymentMode,
         orderStatus: 'ON_HOLD',
         branchName: res.branchName,
         branchPhone: res.branchPhone,
@@ -148,7 +156,16 @@ export function OrderBuilder({
         </div>
         <h1 className="mt-4 font-display text-2xl font-extrabold text-brand-navy">Pesanan Terkirim! 🎉</h1>
         <p className="mt-2 max-w-xs text-brand-navy/60">
-          Pesanan <span className="font-mono font-semibold">{done.orderNumber}</span> menunggu konfirmasi kasir. Kami beri tahu lewat status & chat.
+          Pesanan <span className="font-mono font-semibold">{done.orderNumber}</span> menunggu konfirmasi kasir.
+          {done.paymentMode === 'CASH'
+            ? ' Bayar tunai saat sampai di cabang.'
+            : done.paymentMode === 'PAY_LATER'
+              ? ' Bayar setelah cucian selesai — kasir konfirmasi saat cucian diterima.'
+              : done.paymentStatus === 'PARTIAL'
+              ? ' DP sudah tercatat — sisanya bayar setelah cucian selesai.'
+              : done.paymentMode !== 'CASH'
+                ? ' Bukti pembayaran sudah terkirim ke kasir.'
+                : ''}
         </p>
         <p className="mt-3 max-w-xs rounded-xl bg-brand-sky/10 px-3 py-2 text-xs text-brand-navy/65">
           <Sparkles className="mb-1 inline h-3.5 w-3.5 text-rainbow-yellow" /> Bonus{' '}
@@ -166,6 +183,19 @@ export function OrderBuilder({
           </Button>
         </div>
       </div>
+    );
+  }
+
+  if (step === 'payment') {
+    return (
+      <CustomerPaymentStep
+        totalPrice={totalPrice}
+        branchId={branchId}
+        summaryLabel={summaryLabel}
+        loading={loading}
+        onBack={() => setStep('order')}
+        onSubmit={(payment) => void checkout(payment)}
+      />
     );
   }
 
@@ -367,12 +397,12 @@ export function OrderBuilder({
           </div>
           <Button
             variant="rainbow"
-            onClick={checkout}
+            onClick={() => setStep('payment')}
             disabled={!canCheckout || loading}
             className="px-6"
           >
             <ShoppingBag className="h-4 w-4" />
-            {loading ? 'Memproses...' : 'Pesan Sekarang'}
+            Lanjut Pembayaran
           </Button>
         </div>
       </div>

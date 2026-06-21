@@ -9,6 +9,7 @@ import { InboxOpnameApprovals } from '@/components/inbox/inbox-opname-approvals'
 import { InboxOpnameDrafts } from '@/components/inbox/inbox-opname-drafts';
 import { InboxMachineTroubles } from '@/components/inbox/inbox-machine-troubles';
 import { listPendingOpnameApprovals, listUnfinishedOpnamesForInbox } from '@/app/actions/inventory';
+import { resolveOrderPaymentPlan, parseCustomerPaymentFromNotes } from '@/lib/payment-plan';
 import { Inbox, MessageSquare, ArrowRight, Star, ClipboardCheck, AlertTriangle } from 'lucide-react';
 
 const INBOX_ROLES = [Role.CASHIER, Role.MANAGER, Role.OWNER, Role.SUPER_ADMIN, Role.WORKER];
@@ -86,6 +87,7 @@ export default async function CashierInboxPage() {
             customer: { select: { name: true } },
             serviceType: { select: { name: true, pricePerKg: true } },
             items: { select: { description: true, qty: true, unitPrice: true, total: true } },
+            payments: { select: { method: true, amount: true, proofUrl: true } },
           },
         }),
     prisma.orderReview.findMany({
@@ -185,6 +187,18 @@ export default async function CashierInboxPage() {
                 pricePerKg: o.serviceType.pricePerKg,
                 isKiloan: o.items.some((it) => it.description.toLowerCase().includes('kiloan')),
                 createdAt: o.createdAt.toISOString(),
+                notes: o.notes,
+                paymentPlan: resolveOrderPaymentPlan(
+                  o.total,
+                  o.notes,
+                  o.payments.map((p) => ({ method: p.method, amount: p.amount }))
+                ),
+                customerPayment: parseCustomerPaymentFromNotes(o.notes),
+                payments: o.payments.map((p) => ({
+                  method: p.method,
+                  amount: p.amount,
+                  proofUrl: p.proofUrl,
+                })),
                 items: o.items.map((it) => ({
                   description: it.description,
                   qty: it.qty,
