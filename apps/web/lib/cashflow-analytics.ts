@@ -83,6 +83,7 @@ export async function fetchCashflowOverview(filters: CashflowFilters) {
         ...bf,
         createdAt: { gte: range.start, lte: range.end },
         paymentStatus: 'PAID',
+        status: { not: 'CANCELLED' },
       },
     }),
     prisma.order.aggregate({
@@ -90,6 +91,7 @@ export async function fetchCashflowOverview(filters: CashflowFilters) {
         ...bf,
         createdAt: { gte: range.start, lte: range.end },
         paymentStatus: 'PAID',
+        status: { not: 'CANCELLED' },
       },
       _sum: { weightKg: true },
     }),

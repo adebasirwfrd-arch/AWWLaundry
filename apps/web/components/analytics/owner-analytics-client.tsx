@@ -28,6 +28,8 @@ import {
   WashingMachine,
   Boxes,
   TrendingUp,
+  Clock,
+  Percent,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getOwnerAnalytics } from '@/app/actions/analytics';
@@ -348,6 +350,130 @@ export function OwnerAnalyticsClient({
             </div>
           </ChartCard>
         )}
+      </div>
+
+      {/* PAYMENT BEHAVIOR */}
+      <SectionTitle
+        icon={Clock}
+        title="Perilaku Pembayaran"
+        subtitle={`Analisis Bayar Nanti, DP, dan piutang pelanggan — ${periodLabel}`}
+      />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard
+          icon={Wallet}
+          label="Piutang Aktif"
+          value={formatCurrency(data.summary.outstandingTotal ?? 0)}
+          color="text-brand-orange"
+        />
+        <KpiCard
+          icon={Clock}
+          label="Piutang Bayar Nanti"
+          value={formatCurrency(data.summary.payLaterOutstanding ?? 0)}
+          color="text-rainbow-purple"
+        />
+        <KpiCard
+          icon={Percent}
+          label="Piutang Sisa DP"
+          value={formatCurrency(data.summary.dpOutstanding ?? 0)}
+          color="text-rainbow-pink"
+        />
+        <KpiCard
+          icon={TrendingUp}
+          label="Pelunasan DP"
+          value={`${data.paymentBehavior.collection.dp.rate}%`}
+          color="text-rainbow-green"
+        />
+      </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ChartCard title="Preferensi Metode Pembayaran (Donut)">
+          {data.paymentBehavior.byMode.length > 0 ? (
+            <DonutChart
+              data={data.paymentBehavior.byMode.map((row) => ({
+                name: row.label,
+                value: row.count,
+              }))}
+              height={260}
+            />
+          ) : (
+            <EmptyChart />
+          )}
+        </ChartCard>
+
+        <ChartCard title="Piutang per Perilaku (Batang Horizontal)">
+          {data.paymentBehavior.byMode.some((row) => row.outstanding > 0) ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart
+                data={data.paymentBehavior.byMode.filter((row) => row.outstanding > 0)}
+                layout="vertical"
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis type="number" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10 }} />
+                <YAxis type="category" dataKey="label" width={120} tick={{ fontSize: 9 }} />
+                <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                <Bar dataKey="outstanding" fill={palette.brand.orange} radius={[0, 6, 6, 0]} name="Piutang" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyChart />
+          )}
+        </ChartCard>
+
+        <ChartCard title="Tren Bayar Nanti vs Kombinasi DP (Area)">
+          <ResponsiveContainer width="100%" height={260}>
+            <AreaChart data={data.paymentBehavior.daily}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
+              <Tooltip />
+              <Area type="monotone" dataKey="payLater" stackId="1" fill={palette.rainbow.purple} fillOpacity={0.35} stroke={palette.rainbow.purple} name="Bayar Nanti" />
+              <Area type="monotone" dataKey="combinationDp" stackId="1" fill={palette.rainbow.pink} fillOpacity={0.35} stroke={palette.rainbow.pink} name="Kombinasi DP" />
+              <Legend />
+            </AreaChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        <ChartCard title="Tercatat vs Piutang per Perilaku (Batang)">
+          {data.paymentBehavior.byMode.length > 0 ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={data.paymentBehavior.byMode}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="label" tick={{ fontSize: 9 }} interval={0} angle={-15} textAnchor="end" height={70} />
+                <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10 }} />
+                <Tooltip formatter={(v: number, name: string) => formatCurrency(v)} />
+                <Bar dataKey="collected" fill={palette.rainbow.green} radius={[6, 6, 0, 0]} name="Tercatat" />
+                <Bar dataKey="outstanding" fill={palette.brand.orange} radius={[6, 6, 0, 0]} name="Piutang" />
+                <Legend />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyChart />
+          )}
+        </ChartCard>
+
+        <ChartCard title="Ringkasan Konversi Pembayaran" className="lg:col-span-2">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-2xl border border-rainbow-pink/20 bg-rainbow-pink/5 p-4">
+              <p className="text-sm font-semibold text-brand-navy">Kombinasi (DP)</p>
+              <p className="mt-2 text-2xl font-bold text-brand-navy">{data.paymentBehavior.collection.dp.orders} order</p>
+              <p className="mt-1 text-sm text-brand-navy/60">
+                {data.paymentBehavior.collection.dp.fullyPaid} lunas · {data.paymentBehavior.collection.dp.rate}% pelunasan penuh
+              </p>
+              <p className="mt-2 text-sm text-brand-orange">
+                Piutang sisa: {formatCurrency(data.paymentBehavior.outstanding.combinationDp)}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-rainbow-purple/20 bg-rainbow-purple/5 p-4">
+              <p className="text-sm font-semibold text-brand-navy">Bayar Nanti</p>
+              <p className="mt-2 text-2xl font-bold text-brand-navy">{data.paymentBehavior.collection.payLater.orders} order</p>
+              <p className="mt-1 text-sm text-brand-navy/60">
+                {data.paymentBehavior.collection.payLater.collected} sudah bayar · {data.paymentBehavior.collection.payLater.rate}% konversi
+              </p>
+              <p className="mt-2 text-sm text-brand-orange">
+                Piutang aktif: {formatCurrency(data.paymentBehavior.outstanding.payLater)}
+              </p>
+            </div>
+          </div>
+        </ChartCard>
       </div>
 
       {/* PRODUCTION */}

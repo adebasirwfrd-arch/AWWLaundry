@@ -263,7 +263,7 @@ export function PendingOrders({
         if (kind === 'confirm') {
           const o = snapshot.find((x) => x.id === id);
           if (!o) return;
-          const prepaid = o.payments.length > 0;
+          const prepaid = getPaidAmount(o) > 0;
           const payLater = o.customerPayment?.mode === 'PAY_LATER';
           const err = validateConfirm(prepaid, payLater);
           if (err) throw new Error(err);

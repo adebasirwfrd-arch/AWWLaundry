@@ -5,6 +5,7 @@ import {
   type PaymentFilter,
 } from '@/lib/owner-analytics';
 import { fetchCashflowOverview } from '@/lib/cashflow-analytics';
+import { buildPaymentBehaviorAnalytics } from '@/lib/payment-behavior-analytics';
 import {
   periodRange,
   lastNDays,
@@ -50,7 +51,7 @@ export async function fetchOwnerFullAnalytics(filters: OwnerDashboardFilters) {
     chartOrderWhere.payments = { some: { method: filters.paymentMethod } };
   }
 
-  const [dashboard, cashflow, branches, periodOrders, chartOrders, statusGroups, serviceGroups, productionOrders, inventoryItems, movements, newCustomers, topCustomerGroups, loyaltyTop, totalCustomers] =
+  const [dashboard, cashflow, branches, periodOrders, chartOrders, behaviorOrders, statusGroups, serviceGroups, productionOrders, inventoryItems, movements, newCustomers, topCustomerGroups, loyaltyTop, totalCustomers] =
     await Promise.all([
       fetchOwnerDashboardData(filters),
       fetchCashflowOverview({
@@ -70,6 +71,21 @@ export async function fetchOwnerFullAnalytics(filters: OwnerDashboardFilters) {
       prisma.order.findMany({
         where: chartOrderWhere,
         select: { createdAt: true, total: true, weightKg: true, status: true },
+      }),
+      prisma.order.findMany({
+        where: {
+          ...bw,
+          createdAt: { gte: range.start, lte: range.end },
+          status: { not: 'CANCELLED' },
+        },
+        select: {
+          fromApp: true,
+          paymentStatus: true,
+          total: true,
+          notes: true,
+          createdAt: true,
+          payments: { select: { amount: true, status: true } },
+        },
       }),
       prisma.order.groupBy({
         by: ['status'],
@@ -255,14 +271,20 @@ export async function fetchOwnerFullAnalytics(filters: OwnerDashboardFilters) {
     },
   });
 
+  const paymentBehavior = buildPaymentBehaviorAnalytics(behaviorOrders, chartDays);
+
   return {
     ...dashboard,
     cashflow,
     branches,
+    paymentBehavior,
     summary: {
       orders: periodOrders.length,
       revenue: cashflow.summary.totalIncome,
       netCashflow: cashflow.summary.netCashflow,
+      outstandingTotal: dashboard.metrics.outstandingTotal,
+      payLaterOutstanding: paymentBehavior.outstanding.payLater,
+      dpOutstanding: paymentBehavior.outstanding.combinationDp,
       activeCustomers,
       newCustomers: newInPeriod,
       totalCustomers,

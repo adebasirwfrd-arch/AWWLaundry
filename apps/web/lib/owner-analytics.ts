@@ -33,6 +33,7 @@ function paymentWhere(filters: OwnerDashboardFilters, range: { start: Date; end:
   const where: Record<string, unknown> = {
     branch: { organizationId: filters.organizationId },
     paidAt: { gte: range.start, lte: range.end },
+    status: 'PAID',
   };
   if (filters.branchId) where.branchId = filters.branchId;
   if (filters.paymentMethod !== 'ALL') where.method = filters.paymentMethod;
@@ -56,6 +57,7 @@ export async function fetchOwnerDashboardData(filters: OwnerDashboardFilters) {
     production,
     revenueAgg,
     unpaidAgg,
+    partialOrders,
     recentOrders,
     reviews,
     redeemOrders,
@@ -104,6 +106,15 @@ export async function fetchOwnerDashboardData(filters: OwnerDashboardFilters) {
         status: { not: 'CANCELLED' },
       },
       _sum: { total: true },
+    }),
+    prisma.order.findMany({
+      where: {
+        branch: { organizationId: filters.organizationId },
+        ...(filters.branchId ? { branchId: filters.branchId } : {}),
+        paymentStatus: 'PARTIAL',
+        status: { not: 'CANCELLED' },
+      },
+      select: { total: true, payments: { where: { status: 'PAID' }, select: { amount: true } } },
     }),
     prisma.order.findMany({
       where: orderFilter,
@@ -168,6 +179,11 @@ export async function fetchOwnerDashboardData(filters: OwnerDashboardFilters) {
     revenuePerDay: Math.round((chartOrders.reduce((s, o) => s + o.total, 0) / 7)),
   };
 
+  const partialOutstanding = partialOrders.reduce((sum, order) => {
+    const paid = order.payments.reduce((s, p) => s + p.amount, 0);
+    return sum + Math.max(0, order.total - paid);
+  }, 0);
+
   return {
     metrics: {
       ordersIn,
@@ -176,6 +192,8 @@ export async function fetchOwnerDashboardData(filters: OwnerDashboardFilters) {
       revenue: revenueAgg._sum.amount ?? 0,
       totalWeightIn: weightSum._sum.weightKg ?? 0,
       unpaidTotal: unpaidAgg._sum.total ?? 0,
+      partialOutstanding,
+      outstandingTotal: (unpaidAgg._sum.total ?? 0) + partialOutstanding,
     },
     pipeline,
     productionPipeline,

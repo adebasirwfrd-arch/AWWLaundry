@@ -8,7 +8,7 @@ import { requireAuth } from '@/lib/session';
 import { getCategoryForOrg } from '@/lib/org-settings';
 import { notifyBranchRoles } from '@/lib/notify';
 import { refundRedeemedPoints } from '@/lib/loyalty';
-import { getBranchPrice } from '@/lib/audit';
+import { getBranchPrice, updateDailySummary } from '@/lib/audit';
 import { embedCustomerPaymentInNotes, parseCustomerPaymentFromNotes } from '@/lib/payment-plan';
 import { buildReceiptPaymentFields } from '@/lib/receipt-payment';
 
@@ -236,6 +236,10 @@ export async function createCustomerOrder(input: {
     });
   });
 
+  if (payment.mode !== 'CASH' && payment.mode !== 'PAY_LATER') {
+    await updateDailySummary(branch.id);
+  }
+
   // Notify cashiers/managers/owner to confirm the new app order.
   await notifyBranchRoles({
     branchId: branch.id,
@@ -250,6 +254,8 @@ export async function createCustomerOrder(input: {
   revalidatePath('/customer');
   revalidatePath('/customer/profile');
   revalidatePath('/cashier/inbox');
+  revalidatePath('/owner/cashflow');
+  revalidatePath('/owner/analytics');
 
   const receiptPayment =
     payment.mode === 'COMBINATION' && combinationPlan

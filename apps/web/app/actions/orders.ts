@@ -218,9 +218,12 @@ export async function createOrder(data: {
 
   revalidatePath('/cashier');
   revalidatePath('/cashier/inbox');
+  revalidatePath('/cashier/cashflow');
   revalidatePath('/owner/orders');
   revalidatePath(`/orders/${order.id}`);
   revalidatePath('/owner');
+  revalidatePath('/owner/cashflow');
+  revalidatePath('/owner/analytics');
   revalidatePath('/worker');
   revalidatePath('/owner/audit-trail');
 
@@ -377,7 +380,10 @@ export async function receivePayment(
 
   await updateDailySummary(branchId);
   revalidatePath('/cashier');
+  revalidatePath('/cashier/cashflow');
   revalidatePath('/owner');
+  revalidatePath('/owner/cashflow');
+  revalidatePath('/owner/analytics');
   revalidatePath(`/orders/${orderId}`);
 
   return { success: true, paymentStatus };

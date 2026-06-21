@@ -9,7 +9,8 @@ import {
 } from '@aww/shared';
 import { requireAuth } from '@/lib/session';
 import { createNotification, notifyBranchRoles } from '@/lib/notify';
-import { createAuditLog } from '@/lib/audit';
+import { createAuditLog, updateDailySummary } from '@/lib/audit';
+import { sumPaidAmount } from '@/lib/payment-behavior-analytics';
 import { notifyCustomerOrderCreated, notifyCustomerOrderStatus } from '@/lib/order-notifications';
 import { awardLoyaltyPointsForOrder, awardAppOrderBonus, refundRedeemedPoints } from '@/lib/loyalty';
 import { embedPaymentPlanInNotes, parseCustomerPaymentFromNotes } from '@/lib/payment-plan';
@@ -19,7 +20,10 @@ const STAFF = [Role.CASHIER, Role.MANAGER, Role.OWNER, Role.SUPER_ADMIN];
 const PAYMENT_METHODS = ['CASH', 'BANK_TRANSFER', 'QRIS'] as const;
 export type ConfirmPaymentMethod = (typeof PAYMENT_METHODS)[number];
 
-async function loadOrderForStaff(orderId: string, branchId: string) {
+async function loadOrderForStaff(
+  orderId: string,
+  session: { branchId: string; organizationId: string; role: Role }
+) {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: {
@@ -29,7 +33,21 @@ async function loadOrderForStaff(orderId: string, branchId: string) {
       payments: true,
     },
   });
-  if (!order || order.branchId !== branchId) throw new Error('Pesanan tidak ditemukan');
+  if (!order) throw new Error('Pesanan tidak ditemukan');
+
+  const orgWideAccess =
+    session.role === Role.OWNER || session.role === Role.SUPER_ADMIN;
+
+  if (orgWideAccess) {
+    const branch = await prisma.branch.findFirst({
+      where: { id: order.branchId, organizationId: session.organizationId },
+      select: { id: true },
+    });
+    if (!branch) throw new Error('Pesanan tidak ditemukan');
+  } else if (order.branchId !== session.branchId) {
+    throw new Error('Pesanan tidak ditemukan');
+  }
+
   return order;
 }
 
@@ -61,7 +79,7 @@ export async function confirmOrderWithPayment(input: {
   proofUrl?: string;
 }) {
   const session = await requireAuth(STAFF);
-  const order = await loadOrderForStaff(input.orderId, session.user.branchId);
+  const order = await loadOrderForStaff(input.orderId, session.user);
 
   if (order.status !== 'ON_HOLD') throw new Error('Pesanan sudah dikonfirmasi');
 
@@ -85,7 +103,7 @@ export async function confirmOrderWithPayment(input: {
 
   if (finalTotal <= 0) throw new Error('Total pembayaran tidak valid');
 
-  const existingPaid = order.payments.reduce((s, p) => s + p.amount, 0);
+  const existingPaid = sumPaidAmount(order.payments);
   const prepaidViaApp = existingPaid > 0;
   const customerPayment = parseCustomerPaymentFromNotes(order.notes);
   const payLaterViaApp = customerPayment?.mode === 'PAY_LATER';
@@ -291,11 +309,16 @@ export async function confirmOrderWithPayment(input: {
       : { amount: finalTotal, method: input.paymentMethod, orderNumber: order.orderNumber }
   );
 
+  await updateDailySummary(order.branchId);
+
   revalidatePath('/cashier/inbox');
   revalidatePath('/cashier');
+  revalidatePath('/cashier/cashflow');
   revalidatePath('/worker');
   revalidatePath('/owner');
   revalidatePath('/owner/orders');
+  revalidatePath('/owner/cashflow');
+  revalidatePath('/owner/analytics');
   revalidatePath('/owner/audit-trail');
   revalidatePath(`/orders/${order.id}`);
   revalidatePath('/customer/history');
@@ -307,16 +330,26 @@ export async function confirmOrderWithPayment(input: {
 
 export async function rejectOrder(orderId: string, reason?: string) {
   const session = await requireAuth(STAFF);
-  const order = await loadOrderForStaff(orderId, session.user.branchId);
+  const order = await loadOrderForStaff(orderId, session.user);
   if (order.status !== 'ON_HOLD') throw new Error('Pesanan tidak bisa ditolak');
+
+  const hadPaidPayments = order.payments.some((p) => p.status === 'PAID');
 
   await prisma.$transaction(async (tx) => {
     await refundRedeemedPoints(tx, orderId, order.customerId);
+
+    if (hadPaidPayments) {
+      await tx.payment.updateMany({
+        where: { orderId, status: 'PAID' },
+        data: { status: 'REFUNDED' },
+      });
+    }
 
     await tx.order.update({
       where: { id: orderId },
       data: {
         status: 'CANCELLED',
+        ...(hadPaidPayments ? { paymentStatus: 'REFUNDED' } : {}),
         statusLogs: {
           create: { fromStatus: 'ON_HOLD', toStatus: 'CANCELLED', changedById: session.user.id, note: reason || 'Ditolak kasir' },
         },
@@ -358,9 +391,14 @@ export async function rejectOrder(orderId: string, reason?: string) {
     { status: 'CANCELLED', orderNumber: order.orderNumber, reason: reason || 'Ditolak kasir' }
   );
 
+  await updateDailySummary(order.branchId);
+
   revalidatePath('/cashier/inbox');
+  revalidatePath('/cashier/cashflow');
   revalidatePath('/customer');
   revalidatePath('/customer/profile');
+  revalidatePath('/owner/cashflow');
+  revalidatePath('/owner/analytics');
   revalidatePath('/owner/audit-trail');
   return { ok: true };
 }

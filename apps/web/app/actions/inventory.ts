@@ -437,7 +437,7 @@ export async function submitStockOpnameForApproval(opnameId: string, branchId?: 
 
 /** List opname belum selesai (draft) — untuk kotak masuk pembuat sesi. */
 export async function listUnfinishedOpnamesForInbox() {
-  const session = await requireAuth(INVENTORY_ROLES);
+  const session = await requireAuth([...INVENTORY_ROLES, Role.SUPER_ADMIN]);
   const role = session.user.role as Role;
 
   const rows = await prisma.stockOpname.findMany({

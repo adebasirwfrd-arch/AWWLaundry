@@ -157,10 +157,22 @@ export default async function CashierInboxPage() {
 
   const pendingOrders = await Promise.all(
     pending.map(async (o) => {
-      const payments = await resolveOrderPaymentProofs(
-        o.payments.map((p) => ({ method: p.method, amount: p.amount, proofUrl: p.proofUrl })),
-        o.notes
-      );
+      const basePayments = o.payments.map((p) => ({
+        method: p.method,
+        amount: p.amount,
+        proofUrl: p.proofUrl ?? null,
+      }));
+
+      let payments = basePayments;
+      let customerPayment = parseCustomerPaymentFromNotes(o.notes);
+
+      try {
+        payments = await resolveOrderPaymentProofs(basePayments, o.notes);
+        customerPayment = (await resolveCustomerPaymentProofs(customerPayment)) ?? null;
+      } catch (err) {
+        console.error('[inbox] proof URL resolve failed:', o.orderNumber, err);
+      }
+
       return {
         id: o.id,
         orderNumber: o.orderNumber,
@@ -182,12 +194,8 @@ export default async function CashierInboxPage() {
           o.notes,
           o.payments.map((p) => ({ method: p.method, amount: p.amount }))
         ),
-        customerPayment: await resolveCustomerPaymentProofs(parseCustomerPaymentFromNotes(o.notes)),
-        payments: payments.map((p) => ({
-          method: p.method,
-          amount: p.amount,
-          proofUrl: p.proofUrl,
-        })),
+        customerPayment,
+        payments,
         items: o.items.map((it) => ({
           description: it.description,
           qty: it.qty,
