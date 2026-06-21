@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { PaymentProofCapture } from '@/components/pos/payment-proof-capture';
 import { QrisPaymentDisplay } from '@/components/pos/qris-payment-display';
+import { TransferBankInfo } from '@/components/pos/combination-payment-form';
 import { receivePayment } from '@/app/actions/orders';
 import { toast } from '@/lib/toast';
 import {
@@ -97,6 +98,12 @@ export function RemainingPaymentForm({
           { value: 'BANK_TRANSFER', label: 'Transfer Bank' },
         ]}
       />
+
+      {method === 'BANK_TRANSFER' && (
+        <div className="mt-3">
+          <TransferBankInfo amount={remaining} />
+        </div>
+      )}
 
       {method === 'QRIS' && (
         <div className="mt-3">

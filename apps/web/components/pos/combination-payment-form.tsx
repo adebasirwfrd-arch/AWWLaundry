@@ -5,6 +5,7 @@ import { Select } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { PaymentProofCapture } from '@/components/pos/payment-proof-capture';
 import { QrisPaymentDisplay } from '@/components/pos/qris-payment-display';
+import { CopyableAccountNumber } from '@/components/payment/copyable-account-number';
 import {
   formatCurrency,
   methodNeedsProof,
@@ -193,7 +194,11 @@ export function TransferBankInfo({ amount }: { amount: number }) {
     <div className="rounded-xl border border-rainbow-blue/20 bg-rainbow-blue/5 p-3 text-sm">
       <p className="font-semibold text-brand-navy">Transfer ke {TRANSFER_BANK_DETAILS.bankName}</p>
       <p className="mt-1 text-brand-navy/70">a.n. {TRANSFER_BANK_DETAILS.accountName}</p>
-      <p className="font-mono font-bold text-brand-orange">{TRANSFER_BANK_DETAILS.accountNumber}</p>
+      <CopyableAccountNumber
+        value={TRANSFER_BANK_DETAILS.accountNumber}
+        showHint
+        className="mt-1"
+      />
       <p className="mt-1 text-xs text-brand-navy/55">Nominal: {formatCurrency(amount)}</p>
     </div>
   );

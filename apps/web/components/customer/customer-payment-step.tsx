@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PaymentProofCapture } from '@/components/pos/payment-proof-capture';
+import { CopyableAccountNumber } from '@/components/payment/copyable-account-number';
 import {
   CombinationPaymentForm,
   type CombinationFormState,
@@ -240,9 +241,11 @@ export function CustomerPaymentStep({
             <div className="mt-4 space-y-2 rounded-2xl bg-white/80 p-4 text-sm">
               <p><span className="text-brand-navy/50">Bank</span><br /><strong>{TRANSFER_BANK_DETAILS.bankName}</strong></p>
               <p><span className="text-brand-navy/50">Atas Nama</span><br /><strong>{TRANSFER_BANK_DETAILS.accountName}</strong></p>
-              <p><span className="text-brand-navy/50">No. Rekening</span><br />
-                <strong className="font-mono text-lg tracking-wide text-brand-orange">{TRANSFER_BANK_DETAILS.accountNumber}</strong>
-              </p>
+              <CopyableAccountNumber
+                value={TRANSFER_BANK_DETAILS.accountNumber}
+                showLabel
+                showHint
+              />
               <p><span className="text-brand-navy/50">Nominal transfer</span><br />
                 <strong className="text-brand-orange">{rupiah(totalPrice)}</strong>
               </p>

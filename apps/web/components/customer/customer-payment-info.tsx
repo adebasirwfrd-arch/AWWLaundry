@@ -10,6 +10,7 @@ import {
   TRANSFER_BANK_DETAILS,
   type CustomerOrderPaymentInput,
 } from '@aww/shared';
+import { CopyableAccountNumber } from '@/components/payment/copyable-account-number';
 
 interface CustomerPaymentInfoProps {
   paymentStatus: string;
@@ -109,7 +110,14 @@ export function CustomerPaymentInfo({
 
         {customerPayment?.mode === 'BANK_TRANSFER' && payments.length === 0 && (
           <div className="rounded-xl bg-rainbow-blue/5 px-4 py-3 text-sm">
-            <p className="font-semibold text-brand-navy">{TRANSFER_BANK_DETAILS.formatted}</p>
+            <p className="font-semibold text-brand-navy">
+              {TRANSFER_BANK_DETAILS.bankName} · a.n. {TRANSFER_BANK_DETAILS.accountName}
+            </p>
+            <CopyableAccountNumber
+              value={TRANSFER_BANK_DETAILS.accountNumber}
+              showHint
+              className="mt-2"
+            />
           </div>
         )}
 
